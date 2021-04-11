@@ -1,0 +1,7 @@
+# Others
+documents/
+libraries/
+experiments/
+tools/
+TEST*/
+secrets.h
