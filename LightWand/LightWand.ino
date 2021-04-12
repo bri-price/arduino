@@ -28,10 +28,8 @@ typedef unsigned char prog_uchar;
 #ifdef ESP32
 // LED strip data
 #define DATA_PIN					32
-
 // SD CS
 #define SDSS_PIN					2		
-
 // Joystick
 #define JOYU_PIN					12		
 #define JOYD_PIN					14
@@ -43,19 +41,15 @@ typedef unsigned char prog_uchar;
 #ifdef NANOIOT
 // LED strip data
 #define DATA_PIN					7
-
 // SD CS
 #define SDSS_PIN					10		
-
 // Joystick
 #define JOYU_PIN					2		
 #define JOYD_PIN					3
 #define JOYL_PIN					4			
 #define JOYR_PIN					5			
 #define JOYB_PIN					6		
-
 #endif
-
 
 // ******************************************** CONFIGURATION DATA  *******************************
 // LCD Display
@@ -103,6 +97,7 @@ int sabreLength = 0;
 int sabreColour = 1;
 int sabreMode = SABRE_SOLID;
 boolean sabreFade = true;
+int fxSpeed = 1;
 
 int frameDelay = 15;							// default for the frame delay 
 int frameBlankDelay = 0;						// Default Frame blank delay of 0
@@ -273,8 +268,19 @@ void printToLCDFullLine(int col, int row, String  message) {
 	printToLCD(0, row, mes);
 }
 
+void printProgressToLCD(int cols, int row) {
+
+	String blank = "                ";
+	for (int i = 0; i < cols; i++) {
+		blank.setCharAt(i, '-');
+	}
+
+	const char *mes = blank.c_str();
+	printToLCD(0, row, mes);
+}
+
 void setupLEDs() {
-	LEDS.addLeds<WS2812,	DATA_PIN,RGB>(leds,NUM_LEDS);
+	LEDS.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS);
 	LEDS.setBrightness(84);
 }
 
@@ -282,12 +288,12 @@ bool setupSDcard() {
 
 	int attempts = 0;
 	printToLCD(0, 2, F("SD init starting"));
-	delay(200);
+	delay(100);
 	printToLCD(0, 3, F("  Accessing SD  "));
  
 	pinMode(SDSS_PIN, OUTPUT);
 
-	delay(500);
+	delay(100);
 	while (!SD.begin(SDSS_PIN)) {
 		printToLCD(0, 4, F(" SD init failed "));
 		attempts += 1;
@@ -552,11 +558,7 @@ void loop() {
 					}
 					break;	
 				case 2:
-					printToLCD(0, 2, F("2: Speed   "));
-					printToLCDFullLine(4, 4, sabreSpeed);	 
-					break;	
-				case 3:
-					printToLCD(0, 2, F("3: Colour  "));
+					printToLCD(0, 2, F("2: Colour  "));
 					switch (sabreColour) {
 						case 0:
 							printToLCDFullLine(4, 4, F("Red"));
@@ -572,6 +574,10 @@ void loop() {
 							break;
 					}
 					break;
+				case 3:
+					printToLCD(0, 2, F("3: Speed   "));
+					printToLCDFullLine(4, 4, sabreSpeed);
+					break;	
 				case 4:
 					printToLCD(0, 2, F("4: Appearance "));
 					switch (sabreMode) {
@@ -587,7 +593,11 @@ void loop() {
 					}
 					break;	
 				case 5:
-					printToLCD(0, 2, F("5: Fade       "));
+					printToLCD(0, 2, F("5: FX Speed   "));
+					printToLCDFullLine(4, 4, fxSpeed);
+					break;	
+				case 6:
+					printToLCD(0, 2, F("6: Fade       "));
 					if (sabreFade) {
 						printToLCDFullLine(4, 4, F("On"));
 					} else {
@@ -638,15 +648,18 @@ void loop() {
 								brightness = NormaliseVal(brightness + dir, 0, 100, false);
 								break;
 							case 2:
-								sabreSpeed = NormaliseVal(sabreSpeed + dir, 0, 30, false);
+								sabreColour = NormaliseVal(sabreColour + dir, 0, 3, true);
 								break;
 							case 3:
-								sabreColour = NormaliseVal(sabreColour + dir, 0, 3, true);
+								sabreSpeed = NormaliseVal(sabreSpeed + dir, 0, 30, false);
 								break;
 							case 4:
 								sabreMode = NormaliseVal(sabreMode + dir, SABRE_SOLID, SABRE_THROB, true);
 								break;
 							case 5:
+								fxSpeed = NormaliseVal(sabreSpeed + dir, 0, 30, false);
+								break;
+							case 6:
 								sabreFade = !sabreFade;
 								break;
 						}	
@@ -658,7 +671,7 @@ void loop() {
 						loopCounter = 0;
 						updateScreen = true;					// Screen will need updated
 						if (menuItem == 0) {
-							menuItem = 5;	
+							menuItem = 6;	
 						} else {
 							menuItem -= 1;
 						}
@@ -668,7 +681,7 @@ void loop() {
 						Serial.println("down");
 						loopCounter = 0;
 						updateScreen = true;					// Screen will need updated
-						if (menuItem == 5) {
+						if (menuItem == 6) {
 							menuItem = 0;	
 						} else {
 							menuItem += 1;
@@ -861,7 +874,7 @@ int startPoint = 36;
 float throbVal = 1;
 boolean throbDir = true;
 int maxBrightness = 100;
-int minBrightness = 10;
+int minBrightness = 50;
 boolean logBrightness = false;
 
 int FixVal(int v) {
@@ -900,9 +913,10 @@ int SetSabreLine(int displayWidth, int currentLength) {
 	}
 
 	if (sabreMode == SABRE_PULSE) {
-		startPoint -= 1;
-		if (startPoint == 0) {
-			startPoint = 36;
+		// I think this should allow us any value below 36 to work OK... // to be continued.. ?
+		startPoint -= fxSpeed;
+		if (startPoint <= 0) {
+			startPoint += 36;
 		}
 	} else if (sabreMode == SABRE_THROB) {
 		if (throbDir) {
@@ -918,7 +932,7 @@ int SetSabreLine(int displayWidth, int currentLength) {
 		}
 	}
 	if (sabreMode == SABRE_SOLID) {
-		return 10;
+		return 100;
 	}
 	return 1;
 }
@@ -929,8 +943,6 @@ int SetSabreLine(int displayWidth, int currentLength) {
 
 int GetBrightness(int displayWidth, int b, int i, float throbVal) {
 
-
-	
 	int brange = (maxBrightness - minBrightness) / 2;
 	int quarter = displayWidth / 4;
 	float sval =  i * 2 * 3.14159;	// from 0 to 2pi
@@ -945,13 +957,18 @@ int GetBrightness(int displayWidth, int b, int i, float throbVal) {
 void SendSabre() {
 
 	int displayWidth = NUM_LEDS;
-	 
+	interruptPressed = 0;
 	Serial.println("Starting sabre");
 	bool startingUp = true;
 	bool runningSabre = false;
 	bool shuttingDown = false;
 	int numLit = 0;
 	maxBrightness = 100;
+
+	if (sabreSpeed == 0) {
+		startingUp = false;
+		runningSabre = true;
+	}
 	
 	while (runningSabre || startingUp || shuttingDown) {
 
@@ -962,20 +979,28 @@ void SendSabre() {
 			interruptPressed += 1;										// user is trying to interrupt display, increment count of frames with button held down.		
 		}
 		if (interruptPressed >= 3) {										// 3 or more frames have passed with button pressed
-			shuttingDown = true;
 			runningSabre = false;
+			if (sabreSpeed == 0) {
+				shuttingDown = false;
+			} else {
+				shuttingDown = true;
+			}
+			interruptPressed = 0;
 		}
 
 		if (startingUp) {
-			numLit++;
-			if (numLit == displayWidth) {
+			numLit += sabreSpeed;
+			if (numLit >= displayWidth) {
+				// if we went over the end, just pop back to the end
+				numLit = displayWidth;
 				startingUp = false;
 				runningSabre = true;
 				logBrightness = true;
 			}
 		} else if (shuttingDown) {
 			numLit--;
-			if (numLit == 0) {
+			if (numLit <= 0) {
+				numLit = 0;
 				shuttingDown = false;
 			}
 		}
@@ -988,8 +1013,8 @@ void SendSabre() {
 	Serial.println("Finished running");
 	if (interruptPressed >=3) {
 		delay (500); // add a delay to prevent select button from starting sequence again.
-		interruptPressed = 0;
 	}	
+	interruptPressed = 0;
 }
 
 
@@ -1039,7 +1064,7 @@ void ReadTheFile() {
 		printToLCD(0, 7, F("                "));
 		return;
 	}
-	 
+	
 	int displayWidth = imgWidth;
 	if (imgWidth > NUM_LEDS) {
 		displayWidth = NUM_LEDS;			 //only display the number of led's we have
@@ -1055,8 +1080,11 @@ void ReadTheFile() {
 	// The x,r,b,g sequence below might need to be changed if your strip is displaying
 	// incorrect colors.	Some strips use an x,r,b,g sequence and some use x,r,g,b
 	// Change the order if needed to make the colors correct.
+
+	int pc = 0;
+	int lastpc = 0;
 	
-	for (int y=imgHeight; y > 0; y--) {
+	for (int y = imgHeight; y > 0; y--) {
 		int bufpos=0; 
 		if ((interruptPressed <= 3) && (y <= (imgHeight - 5))) {	 // if the interrupt has not been pressed and we are working on column 5 of the image.	(look for no key presses until into 5th column of image)
 			int keypress = ReadJoystick(true);				//Read the keypad, each successive read will be column+1 until 3 is reached.
@@ -1087,6 +1115,14 @@ void ReadTheFile() {
 		}
 		
 		LatchAndDelay(frameDelay);
+
+		pc = (imgHeight - y + 1) * 16 / imgHeight;
+		if (pc != lastpc) {
+			lastpc = pc;
+			printProgressToLCD(pc, 8);
+		}
+
+		
 		if (frameBlankDelay > 0) {
 			ClearStrip(0);
 			delay(frameBlankDelay);
