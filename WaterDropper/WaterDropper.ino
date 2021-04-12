@@ -12,8 +12,6 @@
 #include <WebResponseImpl.h>
 
 #include <EEPROM.h>
-
-
 #include <U8x8lib.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -50,10 +48,7 @@ int maximumRange = 90;
 int screenTimeout = 5;
 bool useTwoDrops = true;
 
-
 #define EEPROM_SIZE 21
-
-
 
 // run time values
 bool joystickRight = true;
@@ -101,7 +96,7 @@ void InitWiFi() {
 
 void InitServer() {
 	
-	PrintToLCD(0, 5, F("  Init server   "));
+	PrintToLCD(0, 5, F("	Init server	 "));
 	server.on("/set", HTTP_GET, [](AsyncWebServerRequest *request){
 		// get the params here
 
@@ -156,8 +151,6 @@ void InitServer() {
 			paramVal = request->getParam("maxrange")->value();
 			maximumRange = paramVal.toInt();
 		}
-	
-	 
 		request->send(200, "text/plain", "OK");
 	});
 	server.on("/fire", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -182,24 +175,21 @@ void InitServer() {
 
 unsigned long eeprom_crc()
 {
+	const unsigned long crc_table[16] = {
+		0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
+		0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
+		0xedb88320, 0xf00f9344, 0xd6d6a3e8, 0xcb61b38c,
+		0x9b64c2b0, 0x86d3d2d4, 0xa00ae278, 0xbdbdf21c
+	};
 
-  const unsigned long crc_table[16] =
-  {
-    0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
-    0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
-    0xedb88320, 0xf00f9344, 0xd6d6a3e8, 0xcb61b38c,
-    0x9b64c2b0, 0x86d3d2d4, 0xa00ae278, 0xbdbdf21c
-  };
+	unsigned long crc = ~0L;
 
-  unsigned long crc = ~0L;
-
-  for (int index = 0 ; index < EEPROM.length() - 4  ; ++index)
-  {
-    crc = crc_table[(crc ^ EEPROM.read(index)) & 0x0f] ^ (crc >> 4);
-    crc = crc_table[(crc ^ (EEPROM.read(index) >> 4)) & 0x0f] ^ (crc >> 4);
-    crc = ~crc;
-  }
-  return crc;
+	for (int index = 0 ; index < EEPROM.length() - 4	; ++index) {
+		crc = crc_table[(crc ^ EEPROM.read(index)) & 0x0f] ^ (crc >> 4);
+		crc = crc_table[(crc ^ (EEPROM.read(index) >> 4)) & 0x0f] ^ (crc >> 4);
+		crc = ~crc;
+	}
+	return crc;
 }
 
 /*
@@ -217,12 +207,12 @@ bool useTwoDrops = true;
 /*
 int readIntFromEEPROM(int address)
 {
-  return (EEPROM.read(address) << 8) + EEPROM.read(address + 1);
+	return (EEPROM.read(address) << 8) + EEPROM.read(address + 1);
 }
 
 int readBoolFromEEPROM(int address)
 {
-  return (EEPROM.read(address) > 0);
+	return (EEPROM.read(address) > 0);
 }
 */
 
@@ -231,21 +221,21 @@ void InitVariables() {
 	EEPROM.begin(EEPROM_SIZE);
 
 	unsigned long calculatedCrc = eeprom_crc();
-  Serial.print("calculated CRC32 of EEPROM data: 0x");
-  Serial.println(calculatedCrc, HEX);
+	Serial.print("calculated CRC32 of EEPROM data: 0x");
+	Serial.println(calculatedCrc, HEX);
 
 	unsigned long storedCrc;
-  EEPROM.get(EEPROM.length() - 4, storedCrc);
-  Serial.print("stored CRC32 of EEPROM data: 0x");
-  Serial.println(storedCrc, HEX);
-  if (storedCrc != calculatedCrc) {
-  	// they don't match, so let's save the default values
-  	UpdateVariables();
-  	return;
-  }
+	EEPROM.get(EEPROM.length() - 4, storedCrc);
+	Serial.print("stored CRC32 of EEPROM data: 0x");
+	Serial.println(storedCrc, HEX);
+	if (storedCrc != calculatedCrc) {
+		// they don't match, so let's save the default values
+		UpdateVariables();
+		return;
+	}
 
-  // crc is correct, so read the values.
-  /*
+	// crc is correct, so read the values.
+	/*
 	dropOneSize = readIntFromEEPROM(0);
 	dropTwoSize = readIntFromEEPROM(2);
 	delayBeforeShooting = readIntFromEEPROM(4);
@@ -296,7 +286,6 @@ void UpdateVariables() {
 	EEPROM.put(12, flashDuration);
 	EEPROM.put(14, screenTimeout);
 	EEPROM.put(16, useTwoDrops);
-
 	
 	unsigned long calculatedCrc = eeprom_crc();
 	Serial.print("calculated CRC32 of EEPROM data: 0x");
@@ -342,8 +331,7 @@ void setup() {
 	InitWiFi();
 	InitServer();
 	Serial.println("Ready");
-	PrintToLCD(0, 7, F("		 Ready			"));
-
+	PrintToLCD(0, 7, F("     Ready      "));
 	delay(2000);
 	InitLCD();
 }
@@ -364,7 +352,7 @@ void loop() {
 				PrintToLCDFullLine(4, 6, dropOneSize);
 				break;
 			case 3:
-				PrintToLCD(0, 3, F("Use two drops	 "));
+				PrintToLCD(0, 3, F("Use two drops   "));
 				if (useTwoDrops) {
 					PrintToLCDFullLine(4, 6, F("Yes"));
 				} else {
@@ -396,7 +384,7 @@ void loop() {
 				PrintToLCDFullLine(4, 6, maximumRange);
 				break;
 			case 10:
-				PrintToLCD(0, 3, F("Screen timeout	"));
+				PrintToLCD(0, 3, F("Screen timeout  "));
 				PrintToLCDFullLine(4, 6, screenTimeout);
 				break;
 		}
@@ -414,23 +402,6 @@ void loop() {
 	int thisJoyDown = digitalRead(JOY_DOWN_PIN);
 	int thisJoyLeft = digitalRead(JOY_LEFT_PIN);
 	int thisJoyRight = digitalRead(JOY_RIGHT_PIN);
-
-
-	/*
-	 * Comment this back if you need to debug the joystick
-	if (newju == LOW) {
-		Serial.println("Joystick UP");
-	}
-	if (newjd == LOW) {
-		Serial.println("Joystick DOWN");
-	}
-	if (newjl == LOW) {
-		Serial.println("Joystick LEFT");
-	}
-	if (newjr == LOW) {
-		Serial.println("Joystick RIGHT");
-	}
-	*/
 
 	if (thisJoyLeft == LOW || thisJoyRight == LOW) {
 
@@ -542,13 +513,13 @@ void SetupLCD() {
 
 	u8x8.begin();
 	u8x8.setFont(u8x8_font_chroma48medium8_r);
-	PrintToLCD(0, 0, F(" WATER  DROPPER "));
+	PrintToLCD(0, 0, F(" WATER	DROPPER "));
 	PrintToLCD(0, 1, F("  Initializing  "));
 }
 
 void InitLCD() {
 	ClearScreen();
-	PrintToLCD(0, 0, F(" WATER  DROPPER "));
+	PrintToLCD(0, 0, F(" WATER	DROPPER "));
 }
 
 void ClearScreen() {
@@ -684,7 +655,7 @@ void PrintToLCD(int col, int row, const char * message) {
 
 void PrintToLCDFullLine(int col, int row, String	message) {
 
-	String blank = "                ";
+	String blank = "								";
 	int charsAvailable = 16 - col;
 
 	for (int i = 0; i < message.length() && i < charsAvailable; i++) {
