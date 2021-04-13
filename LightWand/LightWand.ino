@@ -226,9 +226,19 @@ void printToLCDFullLine(int col, int row, int ival) {
 	printToLCDFullLine(col, row, s);
 }
 
+void printToLCDFullLineCentred(int row, int ival) {
+	String s = String(ival);
+	printToLCDFullLineCentred(row, s);
+}
+
 void printToLCDFullLine(int col, int row, const char * message) {
 	String s = String(message);
-	 printToLCDFullLine(col, row, s);
+	printToLCDFullLine(col, row, s);
+}
+
+void printToLCDFullLineCentred(int row, const char * message) {
+	String s = String(message);
+	printToLCDFullLineCentred(row, s);
 }
 
 void printToLCD(int col, int row, String  message) {
@@ -241,6 +251,11 @@ void printToLCD(int col, int row, const char * message) {
 	Serial.println("writing to screen");
 	u8x8.drawString(col, row, message);
 	Serial.println(message);
+}
+
+void printToLCDFullLineCentred(int row, String  message) {
+	int col = (16 - message.length()) / 2;
+	printToLCDFullLine(col, row, message);
 }
 
 void printToLCDFullLine(int col, int row, String  message) {
@@ -347,57 +362,57 @@ void loop() {
 		if (updateScreen) {
 			updateScreen = false;
 			switch (menuItem) {
-				case 0:
-					printToLCD(0, 2, F("0: Wand Mode    "));
-					printToLCDFullLine(2, 4, F("Pixel Stick"));
-					break;	
 				case 1:
-					printToLCD(0, 2, F("1: File Select  "));
-					printToLCDFullLine(0, 4, m_CurrentFilename);
+					printToLCD(0, 2, F(" 1: Wand Mode   "));
+					printToLCDFullLineCentred(4, F("Pixel Stick"));
 					break;	
 				case 2:
-					printToLCD(0, 2, F("2: Brightness   "));
-					printToLCDFullLine(4, 4, brightness);
-					if (brightness == 100) {
-						printToLCD(7, 4, F("%"));
-					} else {
-						printToLCD(6, 4, F("%"));
-					}
+					printToLCD(0, 2, F(" 2: File Select "));
+					printToLCDFullLineCentred(4, m_CurrentFilename);
 					break;	
 				case 3:
-					printToLCD(0, 2, F("3: Init Delay   "));
-					printToLCDFullLine(4, 4, initDelay);	 
+					printToLCD(0, 2, F(" 3: Brightness  "));
+					printToLCDFullLine(4, 4, brightness);
+					if (brightness == 100) {
+						printToLCD(9, 4, F("%"));
+					} else {
+						printToLCD(8, 4, F("%"));
+					}
 					break;	
 				case 4:
-					printToLCD(0, 2, F("4: Frame Delay  "));
-					printToLCDFullLine(4, 4, frameDelay);	
+					printToLCD(0, 2, F(" 4: Init Delay  "));
+					printToLCDFullLineCentred(4, initDelay);	 
 					break;	
-				case 5:		
-					printToLCD(0, 2, F("5: Repeat Times "));
-					printToLCDFullLine(4, 4, repeatTimes);	 
+				case 5:
+					printToLCD(0, 2, F(" 5: Frame Delay "));
+					printToLCDFullLineCentred(4, frameDelay);	
 					break;	
-				case 6:
-					printToLCD(0, 2, F("6: Repeat Delay "));
-					printToLCDFullLine(4, 4, repeatDelay);	
+				case 6:		
+					printToLCD(0, 2, F(" 6: Repeat Times"));
+					printToLCDFullLineCentred(4, repeatTimes);	 
 					break;	
 				case 7:
-					printToLCD(0, 2,F( "7: Blank Time   "));
-					printToLCDFullLine(4, 4, frameBlankDelay);	
-					break;	 
+					printToLCD(0, 2, F(" 7: Repeat Delay"));
+					printToLCDFullLineCentred(4, repeatDelay);	
+					break;	
 				case 8:
-					printToLCD(0, 2, F("8: Cycle All    "));
+					printToLCD(0, 2,F( " 8: Blank Time  "));
+					printToLCDFullLineCentred(4, frameBlankDelay);	
+					break;	 
+				case 9:
+					printToLCD(0, 2, F(" 9: Cycle All   "));
 					if (cycleAllImages) {
-						printToLCDFullLine(4, 4, F("Yes"));
+						printToLCDFullLineCentred(4, F("Yes"));
 					} else {
-						printToLCDFullLine(4, 4, F("No ")); 
+						printToLCDFullLineCentred(4, F("No ")); 
 					}	
 					break;
-				case 9:
-					printToLCD(0, 2, F("9: Orientation  "));
+				case 10:
+					printToLCD(0, 2, F("10: Orientation "));
 					if (imageUpsideDown) {
-						printToLCDFullLine(2, 4, F("Upside Down")); 
+						printToLCDFullLineCentred(4, F("Upside Down")); 
 					} else {
-						printToLCDFullLine(4, 4, F("Normal     "));
+						printToLCDFullLineCentred(4, F("Normal"));
 					}	
 					break;
 			}
@@ -460,7 +475,7 @@ void loop() {
 						}
 							
 						ClearStrip(0);								// after last image is displayed clear the strip
-						updateScreen = false;						// No need to update screen, lets keep light off, time exposure may still be happening on camera, so no lights from display.
+//						updateScreen = false;						// No need to update screen, lets keep light off, time exposure may still be happening on camera, so no lights from display.
 						
 						cycleImageCount += 1;
 						if (repeatDelay >0){						// if there is a repeat delay Make sure strip is clear
@@ -477,36 +492,36 @@ void loop() {
 						int dir = (keypress == KEY_RIGHT) ? 1 : -1;
 						updateScreen = true;					// Screen will need updated
 						switch (menuItem) {						// Select the Previous File
-							case 0:
+							case 1:
 								wandMode = WAND_SABRE;
 								break;
-							case 1:
+							case 2:
 								m_FileIndex = NormaliseVal(m_FileIndex + dir, 0, m_NumberOfFiles -1, true);
 								DisplayCurrentFilename();
 								delay(200);		
 								break;
-							case 2:									// Adjust Brightness
+							case 3:									// Adjust Brightness
 								brightness = NormaliseVal(brightness + dir, 0, 100, false);
 								break;
-							case 3:									// Adjust Initial Delay - 1 second
+							case 4:									// Adjust Initial Delay - 1 second
 								initDelay = NormaliseVal(initDelay + dir, 0, 30, false);
 								break;
-							case 4:									// Adjust Frame Delay - 1 millisecond 
+							case 5:									// Adjust Frame Delay - 1 millisecond 
 								frameDelay = NormaliseVal(frameDelay + dir, 0, 100, false);
 								break;
-							case 5:									// Adjust Repeat Times - 1
+							case 6:									// Adjust Repeat Times - 1
 								repeatTimes = NormaliseVal(repeatTimes + dir, 0, 20, false);
 								break;
-							case 6:									// Adjust Repeat Delay - 100 milliseconds
+							case 7:									// Adjust Repeat Delay - 100 milliseconds
 								repeatDelay = NormaliseVal(repeatDelay + dir, 0, 20, false);
 								break;
-							case 7:
+							case 8:
 								frameBlankDelay = NormaliseVal(frameBlankDelay + dir, 0, 20, false);
 								break;
-							case 8:
+							case 9:
 								cycleAllImages = !cycleAllImages;
 								break;
-							case 9:
+							case 10:
 								imageUpsideDown = !imageUpsideDown;
 								break;
 						}	
@@ -516,8 +531,8 @@ void loop() {
 					if (keypress == KEY_UP) {				 // The up key was pressed
 						loopCounter = 0;
 						updateScreen = true;					// Screen will need updated
-						if (menuItem == 0) {
-							menuItem = 9;	
+						if (menuItem == 1) {
+							menuItem = 10;	
 						} else {
 							menuItem -= 1;
 						}
@@ -526,8 +541,8 @@ void loop() {
 					if (keypress == KEY_DOWN) {				 // The down key was pressed
 						loopCounter = 0;
 						updateScreen = true;					// Screen will need updated
-						if (menuItem == 9) {
-							menuItem = 0;	
+						if (menuItem == 10) {
+							menuItem = 1;	
 						} else {
 							menuItem += 1;
 						}
@@ -544,64 +559,64 @@ void loop() {
 			Serial.println("updating screen");
 			updateScreen = false;
 			switch (menuItem) {
-				case 0:
-					printToLCD(0, 2, F("0: Wand Mode    "));
-					printToLCDFullLine(2, 4, F("Light Sabre")); 
-					break;	
 				case 1:
-					printToLCD(0, 2, F("1: Brightness   "));
-					printToLCDFullLine(4, 4, brightness);
-					if (brightness == 100) {
-						printToLCD(7, 4, F("%"));
-					} else {
-						printToLCD(6, 4, F("%"));
-					}
+					printToLCD(0, 2, F(" 1: Wand Mode   "));
+					printToLCDFullLineCentred(4, F("Light Sabre")); 
 					break;	
 				case 2:
-					printToLCD(0, 2, F("2: Colour       "));
+					printToLCD(0, 2, F(" 2: Brightness  "));
+					printToLCDFullLineCentred(4, brightness);
+					if (brightness == 100) {
+						printToLCD(9, 4, F("%"));
+					} else {
+						printToLCD(8, 4, F("%"));
+					}
+					break;	
+				case 3:
+					printToLCD(0, 2, F(" 3: Colour      "));
 					switch (sabreColour) {
 						case 0:
-							printToLCDFullLine(4, 4, F("Red"));
+							printToLCDFullLineCentred(4, F("Red"));
 							break;
 						case 1:
-							printToLCDFullLine(4, 4, F("Green"));
+							printToLCDFullLineCentred(4, F("Green"));
 							break;
 						case 2:
-							printToLCDFullLine(4, 4, F("Blue"));
+							printToLCDFullLineCentred(4, F("Blue"));
 							break;
 						case 3:
-							printToLCDFullLine(4, 4, F("White"));
+							printToLCDFullLineCentred(4, F("White"));
 							break;
 					}
 					break;
-				case 3:
-					printToLCD(0, 2, F("3: Speed        "));
-					printToLCDFullLine(4, 4, sabreSpeed);
-					break;	
 				case 4:
-					printToLCD(0, 2, F("4: Appearance   "));
+					printToLCD(0, 2, F(" 4: Speed       "));
+					printToLCDFullLineCentred(4, sabreSpeed);
+					break;	
+				case 5:
+					printToLCD(0, 2, F(" 5: Appearance  "));
 					switch (sabreMode) {
 						case SABRE_SOLID:
-							printToLCDFullLine(4, 4, F("Solid"));
+							printToLCDFullLineCentred(4, F("Solid"));
 							break;
 						case SABRE_PULSE:
-							printToLCDFullLine(4, 4, F("Pulse"));
+							printToLCDFullLineCentred(4, F("Pulse"));
 							break;
 						case SABRE_THROB:
-							printToLCDFullLine(4, 4, F("Throb"));
+							printToLCDFullLineCentred(4, F("Throb"));
 							break;
 					}
 					break;	
-				case 5:
-					printToLCD(0, 2, F("5: FX Speed     "));
-					printToLCDFullLine(4, 4, fxSpeed);
-					break;	
 				case 6:
-					printToLCD(0, 2, F("6: Fade         "));
+					printToLCD(0, 2, F(" 6: FX Speed    "));
+					printToLCDFullLineCentred(4, fxSpeed);
+					break;	
+				case 7:
+					printToLCD(0, 2, F(" 7: Fade        "));
 					if (sabreFade) {
-						printToLCDFullLine(4, 4, F("On"));
+						printToLCDFullLineCentred(4, F("On"));
 					} else {
-						printToLCDFullLine(4, 4, F("Off"));
+						printToLCDFullLineCentred(4, F("Off"));
 					}
 					break;	
 			}
@@ -628,7 +643,7 @@ void loop() {
 					SendSabre();
 						
 					ClearStrip(0);								// after last image is displayed clear the strip
-					updateScreen = false;						// No need to update screen, lets keep light off, time exposure may still be happening on camera, so no lights from display.
+//					updateScreen = false;						// No need to update screen, lets keep light off, time exposure may still be happening on camera, so no lights from display.
 					
 				} else {
 	
@@ -641,25 +656,25 @@ void loop() {
 						loopCounter = 0;
 						updateScreen = true;
 						switch (menuItem) {
-							case 0:
+							case 1:
 								wandMode = WAND_PIXELSTICK;
 								break;
-							case 1:
+							case 2:
 								brightness = NormaliseVal(brightness + dir, 0, 100, false);
 								break;
-							case 2:
+							case 3:
 								sabreColour = NormaliseVal(sabreColour + dir, 0, 3, true);
 								break;
-							case 3:
+							case 4:
 								sabreSpeed = NormaliseVal(sabreSpeed + dir, 0, 30, false);
 								break;
-							case 4:
+							case 5:
 								sabreMode = NormaliseVal(sabreMode + dir, SABRE_SOLID, SABRE_THROB, true);
 								break;
-							case 5:
+							case 6:
 								fxSpeed = NormaliseVal(fxSpeed + dir, 0, 30, false);
 								break;
-							case 6:
+							case 7:
 								sabreFade = !sabreFade;
 								break;
 						}	
@@ -670,8 +685,8 @@ void loop() {
 						Serial.println("up");
 						loopCounter = 0;
 						updateScreen = true;					// Screen will need updated
-						if (menuItem == 0) {
-							menuItem = 6;	
+						if (menuItem == 1) {
+							menuItem = 7;	
 						} else {
 							menuItem -= 1;
 						}
@@ -681,8 +696,8 @@ void loop() {
 						Serial.println("down");
 						loopCounter = 0;
 						updateScreen = true;					// Screen will need updated
-						if (menuItem == 6) {
-							menuItem = 0;	
+						if (menuItem == 7) {
+							menuItem = 1;	
 						} else {
 							menuItem += 1;
 						}
@@ -964,6 +979,7 @@ void SendSabre() {
 	bool shuttingDown = false;
 	int numLit = 0;
 	maxBrightness = 100;
+	clearLCD();
 
 	if (sabreSpeed == 0) {
 		startingUp = false;
@@ -973,21 +989,25 @@ void SendSabre() {
 	
 	while (runningSabre || startingUp || shuttingDown) {
 
-		int keypress = ReadJoystick(true);				//Read the keypad, each successive read will be column+1 until 3 is reached.
-
-		if (keypress == KEY_BUTTON && interruptPressed <= 3) {	// The select key was pressed or the Aux button was pressed
-			delay(50);
-			interruptPressed += 1;										// user is trying to interrupt display, increment count of frames with button held down.		
-		}
-		
-		if (interruptPressed >= 3) {										// 3 or more frames have passed with button pressed
-			runningSabre = false;
-			if (sabreSpeed == 0) {
-				shuttingDown = false;
-			} else {
-				shuttingDown = true;
+		if (runningSabre) {
+			int keypress = ReadJoystick(true);				//Read the keypad, each successive read will be column+1 until 3 is reached.
+	
+			if (keypress == KEY_BUTTON && interruptPressed <= 3) {	// The select key was pressed or the Aux button was pressed
+				delay(50);
+				interruptPressed += 1;										// user is trying to interrupt display, increment count of frames with button held down.		
+				Serial.print("interrupt = ");
+				Serial.println(interruptPressed);
 			}
-			interruptPressed = 0;
+			
+			if (interruptPressed >= 4) {										// 3 or more frames have passed with button pressed
+				runningSabre = false;
+				if (sabreSpeed == 0) {
+					shuttingDown = false;
+				} else {
+					shuttingDown = true;
+				}
+				interruptPressed = 0;
+			}
 		}
 
 		if (startingUp) {
@@ -1013,10 +1033,12 @@ void SendSabre() {
 		LatchAndDelay(lad);
 	}
 	Serial.println("Finished running");
-	if (interruptPressed >= 3) {
+	if (interruptPressed >= 4) {
 		delay (500); // add a delay to prevent select button from starting sequence again.
 	}	
 	interruptPressed = 0;
+	updateScreen = true;
+	initLCD();
 }
 
 
@@ -1035,10 +1057,11 @@ void ReadTheFile() {
 	uint16_t bmpReserved2 = readInt();
 	uint32_t bmpOffBits = readLong();
 	bmpOffBits = 54;
+	clearLCD();
 	 
 	/* Check file header */
 	if (bmpType != MYBMP_BF_TYPE || bmpOffBits != MYBMP_BF_OFF_BITS) {
-		clearLCD();
+//		clearLCD();
 		printToLCD(0, 6, F("  not a bitmap  "));
 		delay(1000);
 		return;
@@ -1059,7 +1082,7 @@ void ReadTheFile() {
 	 
 	/* Check info header */
 	if (imgSize != MYBMP_BI_SIZE || imgWidth <= 0 || imgHeight <= 0 || imgPlanes != 1 || imgBitCount != 24 || imgCompression != MYBMP_BI_RGB || imgSizeImage == 0 ) {
-		clearLCD();
+//		clearLCD();
 		printToLCDFullLine(0, 6, F("Unsupported bmp "));
 		printToLCDFullLine(0, 7, F("(use 24bpp)"));
 		delay(1000);
@@ -1087,6 +1110,7 @@ void ReadTheFile() {
 	int lastpc = 0;
 	
 	for (int y = imgHeight; y > 0; y--) {
+		
 		int bufpos=0; 
 		if ((interruptPressed <= 3) && (y <= (imgHeight - 5))) {	 // if the interrupt has not been pressed and we are working on column 5 of the image.	(look for no key presses until into 5th column of image)
 			int keypress = ReadJoystick(true);				//Read the keypad, each successive read will be column+1 until 3 is reached.
@@ -1121,7 +1145,7 @@ void ReadTheFile() {
 		pc = (imgHeight - y + 1) * 16 / imgHeight;
 		if (pc != lastpc) {
 			lastpc = pc;
-			printProgressToLCD(pc, 8);
+			printProgressToLCD(pc, 7);
 		}
 
 		
@@ -1135,6 +1159,9 @@ void ReadTheFile() {
 			break;
 		}
 	}
+	printProgressToLCD(0, 7);
+	updateScreen = true;
+	initLCD();
 }
 
 // Sort the filenames in alphabetical order
