@@ -21,8 +21,8 @@ typedef unsigned char prog_uchar;
 #define SERIAL_BAUD 115200
 #define LOOP_CYCLES 2000
 
-//#define ESP32
-#define NANOIOT
+#define ESP32
+//#define NANOIOT
 // ******************************************** PIN ASSIGNMENTS  *******************************
 
 #ifdef ESP32
@@ -558,7 +558,7 @@ void loop() {
 					}
 					break;	
 				case 2:
-					printToLCD(0, 2, F("2: Colour  "));
+					printToLCD(0, 2, F("2: Colour       "));
 					switch (sabreColour) {
 						case 0:
 							printToLCDFullLine(4, 4, F("Red"));
@@ -575,11 +575,11 @@ void loop() {
 					}
 					break;
 				case 3:
-					printToLCD(0, 2, F("3: Speed   "));
+					printToLCD(0, 2, F("3: Speed        "));
 					printToLCDFullLine(4, 4, sabreSpeed);
 					break;	
 				case 4:
-					printToLCD(0, 2, F("4: Appearance "));
+					printToLCD(0, 2, F("4: Appearance   "));
 					switch (sabreMode) {
 						case SABRE_SOLID:
 							printToLCDFullLine(4, 4, F("Solid"));
@@ -593,11 +593,11 @@ void loop() {
 					}
 					break;	
 				case 5:
-					printToLCD(0, 2, F("5: FX Speed   "));
+					printToLCD(0, 2, F("5: FX Speed     "));
 					printToLCDFullLine(4, 4, fxSpeed);
 					break;	
 				case 6:
-					printToLCD(0, 2, F("6: Fade       "));
+					printToLCD(0, 2, F("6: Fade         "));
 					if (sabreFade) {
 						printToLCDFullLine(4, 4, F("On"));
 					} else {
@@ -657,7 +657,7 @@ void loop() {
 								sabreMode = NormaliseVal(sabreMode + dir, SABRE_SOLID, SABRE_THROB, true);
 								break;
 							case 5:
-								fxSpeed = NormaliseVal(sabreSpeed + dir, 0, 30, false);
+								fxSpeed = NormaliseVal(fxSpeed + dir, 0, 30, false);
 								break;
 							case 6:
 								sabreFade = !sabreFade;
@@ -968,6 +968,7 @@ void SendSabre() {
 	if (sabreSpeed == 0) {
 		startingUp = false;
 		runningSabre = true;
+		numLit = displayWidth;
 	}
 	
 	while (runningSabre || startingUp || shuttingDown) {
@@ -978,6 +979,7 @@ void SendSabre() {
 			delay(50);
 			interruptPressed += 1;										// user is trying to interrupt display, increment count of frames with button held down.		
 		}
+		
 		if (interruptPressed >= 3) {										// 3 or more frames have passed with button pressed
 			runningSabre = false;
 			if (sabreSpeed == 0) {
@@ -998,7 +1000,7 @@ void SendSabre() {
 				logBrightness = true;
 			}
 		} else if (shuttingDown) {
-			numLit--;
+			numLit -= sabreSpeed;
 			if (numLit <= 0) {
 				numLit = 0;
 				shuttingDown = false;
@@ -1011,7 +1013,7 @@ void SendSabre() {
 		LatchAndDelay(lad);
 	}
 	Serial.println("Finished running");
-	if (interruptPressed >=3) {
+	if (interruptPressed >= 3) {
 		delay (500); // add a delay to prevent select button from starting sequence again.
 	}	
 	interruptPressed = 0;
