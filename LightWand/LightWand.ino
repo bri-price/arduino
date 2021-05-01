@@ -2,7 +2,7 @@
  * 
  * 		Working Light Wand 
  * 		
- * 		ESP32 dev module
+ * 		ESP32 dev module or Nano Iot 33
  * 
  */
 
@@ -53,7 +53,7 @@ typedef unsigned char prog_uchar;
 
 // ******************************************** CONFIGURATION DATA  *******************************
 // LCD Display
-#define BackLightTimeout			360		// Adjust this to a larger number if you want a longer delay
+#define BACKLIGHTTIMEOUT			360		// Adjust this to a larger number if you want a longer delay
 
 // LED Strip
 #define NUM_LEDS					144		// Set the number of LEDs the LED Strip
@@ -70,20 +70,6 @@ int sabreColours[4][3] = {{210,0,0},{0,200,0},{0,0,180},{220,220,220}};
 
 // ******************************************** PROGRAM VARIABLES  *******************************
 
-/*
-FlashStorage(frame_delay, int);
-FlashStorage(frame_blank_delay, int);
-FlashStorage(init_delay, int);
-FlashStorage(repeat_num, int);
-FlashStorage(repeat_delay, int);
-FlashStorage(repeat_times, int);
-FlashStorage(bright_val, int);
-FlashStorage(cycle_all, boolean);
-FlashStorage(right_to_left, boolean);
-FlashStorage(upside_down, boolean);
-FlashStorage(wand_mode, int);
-*/
-
 #define	WAND_PIXELSTICK				1
 #define WAND_SABRE					2
 
@@ -91,29 +77,35 @@ FlashStorage(wand_mode, int);
 #define SABRE_PULSE					2
 #define SABRE_THROB					3
 
-int wandMode = WAND_SABRE;
-int sabreSpeed = 1;
-int sabreLength = 0;
-int sabreColour = 1;
-int sabreMode = SABRE_SOLID;
-boolean sabreFade = true;
-int fxSpeed = 1;
+#define CONFIG_FILE		"config.bin"
 
-int frameDelay = 15;							// default for the frame delay 
-int frameBlankDelay = 0;						// Default Frame blank delay of 0
-int menuItem = 1;								// Variable for current main menu selection
-boolean updateScreen = true;			// Added to minimize screen update flicker (Brian Heiland)
-int initDelay = 0;									// Variable for delay between button press and start of light sequence
-int repeat = 0;										// Variable to select auto repeat (until select button is pressed again)
-int repeatDelay = 0;								// Variable for delay between repeats
-int repeatTimes = 1;							// Variable to keep track of number of repeats
-int brightness = 90;								// Variable and default for the Brightness of the strip
+typedef struct {
+	int wandMode;				// = WAND_SABRE;
+	int sabreSpeed;				// = 1
+	int sabreLength;			// = 0
+	int sabreColour;			// = 1
+	int sabreMode;				// = SABRE_SOLID;
+	int fxSpeed;				// = 1;
+	int frameDelay;				// = 15;							// default for the frame delay 
+	int frameBlankDelay;		// = 0;						// Default Frame blank delay of 0
+	int initDelay;				// = 0;									// Variable for delay between button press and start of light sequence
+	int repeat;					// = 0;										// Variable to select auto repeat (until select button is pressed again)
+	int repeatDelay;			// = 0;								// Variable for delay between repeats
+	int repeatTimes;			// = 1;							// Variable to keep track of number of repeats
+	int brightness;				// = 90;								// Variable and default for the Brightness of the strip
+	boolean cycleAllImages;		// = false;			//cycle through all images
+	boolean imageRightToLeft;	// = false;
+	boolean imageUpsideDown;	// = false;
+	boolean sabreFade;			// = true;
+
+} CONFIGURATION;
+
+CONFIGURATION config;
+
 int interruptPressed = 0;						// variable to keep track if user wants to interrupt display session.
 int loopCounter = 0;								// count loops as a means to avoid extra presses of keys
-boolean cycleAllImages = false;			//cycle through all images
-boolean imageRightToLeft = false;
-boolean imageUpsideDown = false;
-
+int menuItem = 1;								// Variable for current main menu selection
+boolean updateScreen = true;			// Added to minimize screen update flicker (Brian Heiland)
 boolean cycleAllImagesOneshot = false;
 int cycleImageCount= 0;
 byte x;
@@ -123,7 +115,7 @@ int r = 0;												// Variable for the Red Value
 
 // Backlight
 boolean BackLightTimer = false;
-int BackLightTemp =	BackLightTimeout;
+int BackLightTemp =	BACKLIGHTTIMEOUT;
 
 // Joystick
 int key = KEY_NONE;
@@ -132,6 +124,7 @@ int oldkey = KEY_NONE;
 // SD Card variables and assignments
 File root;
 File dataFile;
+File configFile;
 String m_CurrentFilename = "";
 int m_FileIndex = 0;
 int m_NumberOfFiles = 0;
@@ -146,20 +139,255 @@ U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(/* clock=*/ SCL, /* data=*/ SDA, /* reset
 // LED Strip
 CRGB leds[NUM_LEDS];
 
+uint32_t ReadLong() {
+	uint32_t retValue;
+	byte incomingbyte;
+	 
+	incomingbyte = ReadByte();
+	retValue = (uint32_t)((byte)incomingbyte);
+	 
+	incomingbyte = ReadByte();
+	retValue += (uint32_t)((byte)incomingbyte) << 8;
+	 
+	incomingbyte = ReadByte();
+	retValue += (uint32_t)((byte)incomingbyte) << 16;
+	 
+	incomingbyte = ReadByte();
+	retValue += (uint32_t)((byte)incomingbyte) << 24;
+	 
+	return retValue;
+}
+
+uint16_t ReadInt() {
+	byte incomingbyte;
+	uint16_t retValue;
+	 
+	incomingbyte = ReadByte();
+	retValue += (uint16_t)((byte)incomingbyte);
+	 
+	incomingbyte = ReadByte();
+	retValue += (uint16_t)((byte)incomingbyte) << 8;
+	 
+	return retValue;
+}
+	
+int ReadByte() {
+	int retbyte = -1;
+	while (retbyte < 0) 
+		retbyte = dataFile.read();
+	return retbyte;
+}
+
+int ReadBool() {
+	int retbyte = -1;
+	while (retbyte < 0) 
+		retbyte = dataFile.read();
+	return (retbyte > 0);
+}
+
+void WriteByte(byte wrtByte) {
+
+	dataFile.write(wrtByte);
+}
+
+void writeBool(bool wrtBool) {
+
+	byte wrtByte = 0;
+	if (wrtBool) {
+		wrtByte = 1;
+	}
+	dataFile.write(wrtByte);
+}
+
+void WriteInt(int wrtInt) {
+	byte nextByte = (byte)wrtInt;
+	WriteByte(nextByte);
+	nextByte = (byte)(wrtInt >> 8);
+	WriteByte(nextByte);
+}
+
+void WriteLong(int wrtLong) {
+	byte nextByte = (byte)wrtLong;
+	WriteByte(nextByte);
+	nextByte = (byte)(wrtLong >> 8);
+	WriteByte(nextByte);
+	nextByte = (byte)(wrtLong >> 16);
+	WriteByte(nextByte);
+	nextByte = (byte)(wrtLong >> 24);
+	WriteByte(nextByte);
+}
+
+
+bool InitConfig() {
+
+	config.wandMode = WAND_SABRE;
+	config.sabreSpeed = 1;
+	config.sabreLength = 0;
+	config.sabreColour = 1;
+	config.sabreMode = SABRE_SOLID;
+	config.fxSpeed = 1;
+	config.frameDelay = 15;							// default for the frame delay 
+	config.frameBlankDelay = 0;						// Default Frame blank delay of 0
+	config.initDelay = 0;									// Variable for delay between button press and start of light sequence
+	config.repeat = 0;										// Variable to select auto repeat (until select button is pressed again)
+	config.repeatDelay = 0;								// Variable for delay between repeats
+	config.repeatTimes = 1;							// Variable to keep track of number of repeats
+	config.brightness = 90;								// Variable and default for the Brightness of the strip
+	config.cycleAllImages = false;			//cycle through all images
+	config.imageRightToLeft = false;
+	config.imageUpsideDown = false;
+	config.sabreFade = true;
+
+	Serial.print("config.wandMode = ");
+	Serial.println(config.wandMode);
+	Serial.print("config.sabreSpeed = ");
+	Serial.println(config.sabreSpeed);
+	Serial.print("config.sabreLength = ");
+	Serial.println(config.sabreLength);
+	Serial.print("config.sabreColour = ");
+	Serial.println(config.sabreColour);
+	Serial.print("config.sabreMode = ");
+	Serial.println(config.sabreMode);
+	Serial.print("config.sabreFade = ");
+	Serial.println(config.sabreFade);
+	Serial.print("config.fxSpeed = ");
+	Serial.println(config.fxSpeed);
+	Serial.print("config.frameDelay = ");
+	Serial.println(config.frameDelay);
+	Serial.print("config.frameBlankDelay = ");
+	Serial.println(config.frameBlankDelay);
+	Serial.print("config.initDelay = ");
+	Serial.println(config.initDelay);
+	Serial.print("config.repeat = ");
+	Serial.println(config.repeat);
+	Serial.print("config.repeatDelay = ");
+	Serial.println(config.repeatDelay);
+	Serial.print("config.repeatTimes = ");
+	Serial.println(config.repeatTimes);
+	Serial.print("config.brightness = ");
+	Serial.println(config.brightness);
+	Serial.print("config.cycleAllImages = ");
+	Serial.println(config.cycleAllImages);
+	Serial.print("config.imageRightToLeft = ");
+	Serial.println(config.imageRightToLeft);
+	Serial.print("config.imageUpsideDown = ");
+	Serial.println(config.imageUpsideDown);		
+}
+
+bool ReadConfig() {
+
+
+	dataFile = SD.open(CONFIG_FILE);
+	if (dataFile) {
+
+		config.wandMode = ReadInt();
+		config.sabreSpeed = ReadInt();
+		config.sabreLength = ReadInt();
+		config.sabreColour = ReadInt();
+		config.sabreMode = ReadInt();
+		config.fxSpeed = ReadInt();
+		config.frameDelay = ReadInt();							// default for the frame delay 
+		config.frameBlankDelay = ReadInt();						// Default Frame blank delay of 0
+		config.initDelay = ReadInt();									// Variable for delay between button press and start of light sequence
+		config.repeat = ReadInt();										// Variable to select auto repeat (until select button is pressed again)
+		config.repeatDelay = ReadInt();								// Variable for delay between repeats
+		config.repeatTimes = ReadInt();							// Variable to keep track of number of repeats
+		config.brightness = ReadInt();								// Variable and default for the Brightness of the strip
+		config.cycleAllImages = ReadBool();			//cycle through all images
+		config.imageRightToLeft = ReadBool();
+		config.imageUpsideDown = ReadBool();
+		config.sabreFade = ReadBool();
+	
+		dataFile.close();
+
+		Serial.print("config.wandMode = ");
+		Serial.println(config.wandMode);
+		Serial.print("config.sabreSpeed = ");
+		Serial.println(config.sabreSpeed);
+		Serial.print("config.sabreLength = ");
+		Serial.println(config.sabreLength);
+		Serial.print("config.sabreColour = ");
+		Serial.println(config.sabreColour);
+		Serial.print("config.sabreMode = ");
+		Serial.println(config.sabreMode);
+		Serial.print("config.sabreFade = ");
+		Serial.println(config.sabreFade);
+		Serial.print("config.fxSpeed = ");
+		Serial.println(config.fxSpeed);
+		Serial.print("config.frameDelay = ");
+		Serial.println(config.frameDelay);
+		Serial.print("config.frameBlankDelay = ");
+		Serial.println(config.frameBlankDelay);
+		Serial.print("config.initDelay = ");
+		Serial.println(config.initDelay);
+		Serial.print("config.repeat = ");
+		Serial.println(config.repeat);
+		Serial.print("config.repeatDelay = ");
+		Serial.println(config.repeatDelay);
+		Serial.print("config.repeatTimes = ");
+		Serial.println(config.repeatTimes);
+		Serial.print("config.brightness = ");
+		Serial.println(config.brightness);
+		Serial.print("config.cycleAllImages = ");
+		Serial.println(config.cycleAllImages);
+		Serial.print("config.imageRightToLeft = ");
+		Serial.println(config.imageRightToLeft);
+		Serial.print("config.imageUpsideDown = ");
+		Serial.println(config.imageUpsideDown);		
+	} else {
+		Serial.println("Failed to open config.bin for reading");
+	}
+}
+
+bool WriteConfig() {
+
+	SD.remove(CONFIG_FILE);
+	dataFile = SD.open(CONFIG_FILE, FILE_WRITE);
+	if (dataFile) {
+
+		WriteInt(config.wandMode);
+		WriteInt(config.sabreSpeed);
+		WriteInt(config.sabreLength);
+		WriteInt(config.sabreColour);
+		WriteInt(config.sabreMode);
+		WriteInt(config.fxSpeed);
+		WriteInt(config.frameDelay);							// default for the frame delay 
+		WriteInt(config.frameBlankDelay);						// Default Frame blank delay of 0
+		WriteInt(config.initDelay);									// Variable for delay between button press and start of light sequence
+		WriteInt(config.repeat);										// Variable to select auto repeat (until select button is pressed again)
+		WriteInt(config.repeatDelay);								// Variable for delay between repeats
+		WriteInt(config.repeatTimes);							// Variable to keep track of number of repeats
+		WriteInt(config.brightness);								// Variable and default for the Brightness of the strip
+		writeBool(config.cycleAllImages);			//cycle through all images
+		writeBool(config.imageRightToLeft);
+		writeBool(config.imageUpsideDown);
+		writeBool(config.sabreFade);
+
+		dataFile.close();
+	} else {
+		Serial.println("Failed to open config.bin for writing");
+	}
+}
+
+
+
+
+
+
 /*
 void InitFlashStorage() {
 
-	frameDelay = frame_delay.read();
-	if (frameDelay == 0) {
-		frameDelay = 15;
+	config.frameDelay = frame_delay.read();
+	if (config.frameDelay == 0) {
+		config.frameDelay = 15;
 	}
 		
-	initDelay = init_delay.read();
+	config.initDelay = init_delay.read();
 	repeat = repeat_num.read();
-	repeatDelay = repeat_delay.read();
-	repeatTimes = repeat_times.read();
-	if (repeatTimes == 0) {
-		repeatTimes = 1;
+	config.repeatDelay = repeat_delay.read();
+	config.repeatTimes = repeat_times.read();
+	if (config.repeatTimes == 0) {
+		config.repeatTimes = 1;
 	}
 	brightness = bright_val.read();  // <-- save the age
 	if (brightness == 0) {
@@ -170,43 +398,43 @@ void InitFlashStorage() {
 	imageRightToLeft = right_to_left.read();
 	imageUpsideDown = upside_down.read();
 	
-	wandMode = wand_mode.read();
+	config.wandMode = wand_mode.read();
 }
 
 void UpdateFlashStorage() {
-	frame_delay.write(frameDelay);
-	init_delay.write(initDelay);
+	frame_delay.write(config.frameDelay);
+	init_delay.write(config.initDelay);
 	repeat_num.write(repeat);
-	repeat_delay.write(repeatDelay);
-	repeat_times.write(repeatTimes);
+	repeat_delay.write(config.repeatDelay);
+	repeat_times.write(config.repeatTimes);
 	bright_val.write(brightness);
 	cycle_all.write(cycleAllImages);
 	right_to_left.write(imageRightToLeft);
 	upside_down.write(imageUpsideDown);
-	wand_mode.write(wandMode);
+	wand_mode.write(config.wandMode);
 
 }
 */
 
-void clearLCD(void) {
+void ClearLCD(void) {
 	u8x8.clearDisplay();
 	Serial.println("clear lcd");
 }
 
-void setupLCDdisplay() {
+void SetupLCDdisplay() {
 	u8x8.begin();
 	u8x8.setFont(u8x8_font_chroma48medium8_r);
-	printToLCD(0, 0, F("-PIXELWAND V1.2-"));
-	printToLCD(2, 1, F("Initializing"));
+	PrintToLCD(0, 0, F("-PIXELWAND V1.2-"));
+	PrintToLCD(2, 1, F("Initializing"));
 	delay(200);	
 }
 
-void initLCD() {
-	clearLCD();
-	printToLCD(0, 0, F("-PIXELWAND V1.2-"));
+void InitLCD() {
+	ClearLCD();
+	PrintToLCD(0, 0, F("-PIXELWAND V1.2-"));
 }
 
-void setupJoystick() {
+void SetupJoystick() {
 	pinMode(JOYU_PIN, INPUT_PULLUP);
 	pinMode(JOYD_PIN, INPUT_PULLUP);
 	pinMode(JOYL_PIN, INPUT_PULLUP);
@@ -214,55 +442,55 @@ void setupJoystick() {
 	pinMode(JOYB_PIN, INPUT_PULLUP);
 }
 
-void printToLCD(int col, int row, int ival) {
+void PrintToLCD(int col, int row, int ival) {
 
 	String s = String(ival);
 	const char *mes = s.c_str();
-	printToLCD(col, row, mes);
+	PrintToLCD(col, row, mes);
 }
 
-void printToLCDFullLine(int col, int row, int ival) {
+void PrintToLCDFullLine(int col, int row, int ival) {
 
 	String s = String(ival);
-	printToLCDFullLine(col, row, s);
+	PrintToLCDFullLine(col, row, s);
 }
 
-void printToLCDFullLineCentred(int row, int ival, bool perc = false) {
+void PrintToLCDFullLineCentred(int row, int ival, bool perc = false) {
 	String s = String(ival);
 	if (perc) {
 		s += "%";
 	}
-	printToLCDFullLineCentred(row, s);
+	PrintToLCDFullLineCentred(row, s);
 }
 
-void printToLCDFullLine(int col, int row, const char * message) {
+void PrintToLCDFullLine(int col, int row, const char * message) {
 	String s = String(message);
-	printToLCDFullLine(col, row, s);
+	PrintToLCDFullLine(col, row, s);
 }
 
-void printToLCDFullLineCentred(int row, const char * message) {
+void PrintToLCDFullLineCentred(int row, const char * message) {
 	String s = String(message);
-	printToLCDFullLineCentred(row, s);
+	PrintToLCDFullLineCentred(row, s);
 }
 
-void printToLCD(int col, int row, String  message) {
+void PrintToLCD(int col, int row, String  message) {
 
 	const char *mes = message.c_str();
-	printToLCD(col, row, mes);
+	PrintToLCD(col, row, mes);
 }
 
-void printToLCD(int col, int row, const char * message) {
+void PrintToLCD(int col, int row, const char * message) {
 	Serial.println("writing to screen");
 	u8x8.drawString(col, row, message);
 	Serial.println(message);
 }
 
-void printToLCDFullLineCentred(int row, String  message) {
+void PrintToLCDFullLineCentred(int row, String  message) {
 	int col = (16 - message.length()) / 2;
-	printToLCDFullLine(col, row, message);
+	PrintToLCDFullLine(col, row, message);
 }
 
-void printToLCDFullLine(int col, int row, String  message) {
+void PrintToLCDFullLine(int col, int row, String  message) {
 
 	String blank = "                ";
 	int charsAvailable = 16 - col;
@@ -284,10 +512,10 @@ void printToLCDFullLine(int col, int row, String  message) {
 		Serial.println("'");
 	}
 	const char *mes = blank.c_str();
-	printToLCD(0, row, mes);
+	PrintToLCD(0, row, mes);
 }
 
-void printProgressToLCD(int cols, int row) {
+void PrintProgressToLCD(int cols, int row) {
 
 	String blank = "----------------";
 	if (cols == 0) {
@@ -298,55 +526,51 @@ void printProgressToLCD(int cols, int row) {
 	}
 
 	const char *mes = blank.c_str();
-	printToLCD(0, row, mes);
+	PrintToLCD(0, row, mes);
 }
 
-void setupLEDs() {
+void SetupLEDs() {
 	LEDS.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS);
-	LEDS.setBrightness(brightness);
+	LEDS.setBrightness(config.brightness);
 }
 
 
-bool setupSDcard() {
+bool SetupSDcard() {
 
 	int attempts = 0;
-	printToLCD(0, 2, F("SD init starting"));
+	PrintToLCD(0, 2, F("SD init starting"));
 	delay(100);
-	printToLCD(0, 3, F("  Accessing SD  "));
+	PrintToLCD(0, 3, F("  Accessing SD  "));
  
 	pinMode(SDSS_PIN, OUTPUT);
 
 	delay(100);
 	while (!SD.begin(SDSS_PIN)) {
-		printToLCD(0, 4, F(" SD init failed "));
+		PrintToLCD(0, 4, F(" SD init failed "));
 		attempts += 1;
 		if (attempts > 10) {
-			printToLCD(0, 4, F(" giving up "));
+			PrintToLCD(0, 4, F(" giving up "));
 			Serial.println("gave up trying to initialise the SD card");
 			return false;
 		}
 		delay(500);
 	}
-	printToLCD(0, 4, F("  SD init done  "));
+	PrintToLCD(0, 4, F("  SD init done  "));
 	return true;
-}
-
-void readValuesFromSD() {
-  File dataFile = SD.open("datalog.txt", FILE_WRITE);
 }
 
 void readSDcard() {
 
 	root = SD.open("/");
-	printToLCD(0, 5, F(" Scanning files "));
+	PrintToLCD(0, 5, F(" Scanning files "));
 	delay(300);
 	GetFileNamesFromSD(root);
-	printToLCD(0, 6, F("num files: "));
-	printToLCD(11, 6, m_NumberOfFiles);
-	isort(m_FileNames, m_NumberOfFiles);
+	PrintToLCD(0, 6, F("num files: "));
+	PrintToLCD(11, 6, m_NumberOfFiles);
+	SortFilenames(m_FileNames, m_NumberOfFiles);
 	m_CurrentFilename = m_FileNames[0];
 	delay(1000);
-	printToLCDFullLine(0, 6, m_CurrentFilename);
+	PrintToLCDFullLine(0, 6, m_CurrentFilename);
 	delay(1000);
 	Serial.print("current filename = ");
 	Serial.println(m_CurrentFilename);
@@ -356,70 +580,71 @@ void readSDcard() {
 void setup() {
 	Serial.begin(SERIAL_BAUD);
 	delay(500);
-	setupLCDdisplay();
+	SetupLCDdisplay();
 	delay(100);
-	setupLEDs();
-	setupJoystick();
-//	InitFlashStorage();
-	if (setupSDcard() == true) {
+	SetupLEDs();
+	SetupJoystick();
+	InitConfig();
+	if (SetupSDcard() == true) {
 		readSDcard();
+		ReadConfig();
 	}
-	initLCD();
+	InitLCD();
 }
 
 void loop() {
 
 
-	if (wandMode == WAND_PIXELSTICK) {
+	if (config.wandMode == WAND_PIXELSTICK) {
 		if (updateScreen) {
 			updateScreen = false;
 			switch (menuItem) {
 				case 1:
-					printToLCD(0, 2, F(" 1: Wand Mode   "));
-					printToLCDFullLineCentred(4, F("Pixel Stick"));
+					PrintToLCD(0, 2, F(" 1: Wand Mode   "));
+					PrintToLCDFullLineCentred(4, F("Pixel Stick"));
 					break;	
 				case 2:
-					printToLCD(0, 2, F(" 2: File Select "));
-					printToLCDFullLineCentred(4, m_CurrentFilename);
+					PrintToLCD(0, 2, F(" 2: File Select "));
+					PrintToLCDFullLineCentred(4, m_CurrentFilename);
 					break;	
 				case 3:
-					printToLCD(0, 2, F(" 3: Brightness  "));
-					printToLCDFullLineCentred(4, brightness, true);
+					PrintToLCD(0, 2, F(" 3: Brightness  "));
+					PrintToLCDFullLineCentred(4, config.brightness, true);
 					break;	
 				case 4:
-					printToLCD(0, 2, F(" 4: Init Delay  "));
-					printToLCDFullLineCentred(4, initDelay);	 
+					PrintToLCD(0, 2, F(" 4: Init Delay  "));
+					PrintToLCDFullLineCentred(4, config.initDelay);	 
 					break;	
 				case 5:
-					printToLCD(0, 2, F(" 5: Frame Delay "));
-					printToLCDFullLineCentred(4, frameDelay);	
+					PrintToLCD(0, 2, F(" 5: Frame Delay "));
+					PrintToLCDFullLineCentred(4, config.frameDelay);	
 					break;	
 				case 6:		
-					printToLCD(0, 2, F(" 6: Repeat Times"));
-					printToLCDFullLineCentred(4, repeatTimes);	 
+					PrintToLCD(0, 2, F(" 6: Repeat Times"));
+					PrintToLCDFullLineCentred(4, config.repeatTimes);	 
 					break;	
 				case 7:
-					printToLCD(0, 2, F(" 7: Repeat Delay"));
-					printToLCDFullLineCentred(4, repeatDelay);	
+					PrintToLCD(0, 2, F(" 7: Repeat Delay"));
+					PrintToLCDFullLineCentred(4, config.repeatDelay);	
 					break;	
 				case 8:
-					printToLCD(0, 2,F( " 8: Blank Time  "));
-					printToLCDFullLineCentred(4, frameBlankDelay);	
+					PrintToLCD(0, 2,F( " 8: Blank Time  "));
+					PrintToLCDFullLineCentred(4, config.frameBlankDelay);	
 					break;	 
 				case 9:
-					printToLCD(0, 2, F(" 9: Cycle All   "));
-					if (cycleAllImages) {
-						printToLCDFullLineCentred(4, F("Yes"));
+					PrintToLCD(0, 2, F(" 9: Cycle All   "));
+					if (config.cycleAllImages) {
+						PrintToLCDFullLineCentred(4, F("Yes"));
 					} else {
-						printToLCDFullLineCentred(4, F("No ")); 
+						PrintToLCDFullLineCentred(4, F("No ")); 
 					}	
 					break;
 				case 10:
-					printToLCD(0, 2, F("10: Orientation "));
-					if (imageUpsideDown) {
-						printToLCDFullLineCentred(4, F("Upside Down")); 
+					PrintToLCD(0, 2, F("10: Orientation "));
+					if (config.imageUpsideDown) {
+						PrintToLCDFullLineCentred(4, F("Upside Down")); 
 					} else {
-						printToLCDFullLineCentred(4, F("Normal"));
+						PrintToLCDFullLineCentred(4, F("Normal"));
 					}	
 					break;
 			}
@@ -441,12 +666,14 @@ void loop() {
 				// only do these checks if a key pressed
 				if (keypress == KEY_BUTTON) {		// The select key was pressed
 					Serial.println("key button pressed");
+					WriteConfig();
+
 					loopCounter = 0;				// tell the loop counter to not read another keypress until the main loop, loops another 2000 times
-					delay((initDelay * 1000) +100);
+					delay((config.initDelay * 1000) +100);
 					cycleImageCount = 0;
 					do {
-						cycleAllImagesOneshot = cycleAllImages;
-						if (cycleAllImages) {
+						cycleAllImagesOneshot = config.cycleAllImages;
+						if (config.cycleAllImages) {
 		
 							m_CurrentFilename = m_FileNames[cycleImageCount];
 							if (m_CurrentFilename == "STARTUP.BMP") {
@@ -460,9 +687,9 @@ void loop() {
 						}
 						
 						interruptPressed = 0;						// Might need removed Brian Heiland	 
-						if (repeatTimes > 1) {						// If there are repeats selected
+						if (config.repeatTimes > 1) {						// If there are repeats selected
 		
-							for (int x = repeatTimes; x > 0; x--) {	// cycle through repeats
+							for (int x = config.repeatTimes; x > 0; x--) {	// cycle through repeats
 								if (interruptPressed >= 3) {			// Look for interrupt pressed count to be 3 or higher
 									interruptPressed = 0;			// set interrupt pressed back to 0 
 									cycleAllImagesOneshot = 0;
@@ -471,10 +698,10 @@ void loop() {
 								Serial.println("Sending file");
 								SendFile(m_CurrentFilename);		//display file 
 		
-								if (repeatDelay > 0) {				// if there is a repeat delay Make sure strip is clear
+								if (config.repeatDelay > 0) {				// if there is a repeat delay Make sure strip is clear
 									ClearStrip(0);					// Before waiting with stuck pixels
 								}
-								delay(repeatDelay * 100);					// delay for the repeat delay before looping 
+								delay(config.repeatDelay * 100);					// delay for the repeat delay before looping 
 							}
 						} else {
 							interruptPressed = 0;					// User only is displaying image one time 
@@ -485,10 +712,10 @@ void loop() {
 //						updateScreen = false;						// No need to update screen, lets keep light off, time exposure may still be happening on camera, so no lights from display.
 						
 						cycleImageCount += 1;
-						if (repeatDelay >0){						// if there is a repeat delay Make sure strip is clear
+						if (config.repeatDelay >0){						// if there is a repeat delay Make sure strip is clear
 							ClearStrip(0);							// Before waiting with stuck pixels
 						}
-						delay(repeatDelay);							// Use repeat delay before shoewing next image 
+						delay(config.repeatDelay);							// Use repeat delay before shoewing next image 
 					} while((cycleAllImagesOneshot) && (cycleImageCount < m_NumberOfFiles));
 				} else {
 	
@@ -500,7 +727,7 @@ void loop() {
 						updateScreen = true;					// Screen will need updated
 						switch (menuItem) {						// Select the Previous File
 							case 1:
-								wandMode = WAND_SABRE;
+								config.wandMode = WAND_SABRE;
 								break;
 							case 2:
 								m_FileIndex = NormaliseVal(m_FileIndex + dir, 0, m_NumberOfFiles -1, true);
@@ -508,28 +735,28 @@ void loop() {
 								delay(200);		
 								break;
 							case 3:									// Adjust Brightness
-								brightness = NormaliseVal(brightness + dir, 0, 100, false);
+								config.brightness = NormaliseVal(config.brightness + dir, 0, 100, false);
 								break;
 							case 4:									// Adjust Initial Delay - 1 second
-								initDelay = NormaliseVal(initDelay + dir, 0, 30, false);
+								config.initDelay = NormaliseVal(config.initDelay + dir, 0, 30, false);
 								break;
 							case 5:									// Adjust Frame Delay - 1 millisecond 
-								frameDelay = NormaliseVal(frameDelay + dir, 0, 100, false);
+								config.frameDelay = NormaliseVal(config.frameDelay + dir, 0, 100, false);
 								break;
 							case 6:									// Adjust Repeat Times - 1
-								repeatTimes = NormaliseVal(repeatTimes + dir, 0, 20, false);
+								config.repeatTimes = NormaliseVal(config.repeatTimes + dir, 0, 20, false);
 								break;
 							case 7:									// Adjust Repeat Delay - 100 milliseconds
-								repeatDelay = NormaliseVal(repeatDelay + dir, 0, 20, false);
+								config.repeatDelay = NormaliseVal(config.repeatDelay + dir, 0, 20, false);
 								break;
 							case 8:
-								frameBlankDelay = NormaliseVal(frameBlankDelay + dir, 0, 20, false);
+								config.frameBlankDelay = NormaliseVal(config.frameBlankDelay + dir, 0, 20, false);
 								break;
 							case 9:
-								cycleAllImages = !cycleAllImages;
+								config.cycleAllImages = !config.cycleAllImages;
 								break;
 							case 10:
-								imageUpsideDown = !imageUpsideDown;
+								config.imageUpsideDown = !config.imageUpsideDown;
 								break;
 						}	
 					}
@@ -561,71 +788,64 @@ void loop() {
 		}
 	} 
 	
-	if (wandMode == WAND_SABRE) {
+	if (config.wandMode == WAND_SABRE) {
 		if (updateScreen) {
 			Serial.println("updating screen");
 			updateScreen = false;
 			switch (menuItem) {
 				case 1:
-					printToLCD(0, 2, F(" 1: Wand Mode   "));
-					printToLCDFullLineCentred(4, F("Light Sabre")); 
+					PrintToLCD(0, 2, F(" 1: Wand Mode   "));
+					PrintToLCDFullLineCentred(4, F("Light Sabre")); 
 					break;	
 				case 2:
-					printToLCD(0, 2, F(" 2: Brightness  "));
-					printToLCDFullLineCentred(4, brightness, true);
-					/*
-					if (brightness == 100) {
-						printToLCD(7, 4, F("% "));
-					} else {
-						printToLCD(6, 4, F("%" ));
-					}
-					*/
+					PrintToLCD(0, 2, F(" 2: Brightness  "));
+					PrintToLCDFullLineCentred(4, config.brightness, true);
 					break;	
 				case 3:
-					printToLCD(0, 2, F(" 3: Colour      "));
-					switch (sabreColour) {
+					PrintToLCD(0, 2, F(" 3: Colour      "));
+					switch (config.sabreColour) {
 						case 0:
-							printToLCDFullLineCentred(4, F("Red"));
+							PrintToLCDFullLineCentred(4, F("Red"));
 							break;
 						case 1:
-							printToLCDFullLineCentred(4, F("Green"));
+							PrintToLCDFullLineCentred(4, F("Green"));
 							break;
 						case 2:
-							printToLCDFullLineCentred(4, F("Blue"));
+							PrintToLCDFullLineCentred(4, F("Blue"));
 							break;
 						case 3:
-							printToLCDFullLineCentred(4, F("White"));
+							PrintToLCDFullLineCentred(4, F("White"));
 							break;
 					}
 					break;
 				case 4:
-					printToLCD(0, 2, F(" 4: Speed       "));
-					printToLCDFullLineCentred(4, sabreSpeed);
+					PrintToLCD(0, 2, F(" 4: Speed       "));
+					PrintToLCDFullLineCentred(4, config.sabreSpeed);
 					break;	
 				case 5:
-					printToLCD(0, 2, F(" 5: Appearance  "));
-					switch (sabreMode) {
+					PrintToLCD(0, 2, F(" 5: Appearance  "));
+					switch (config.sabreMode) {
 						case SABRE_SOLID:
-							printToLCDFullLineCentred(4, F("Solid"));
+							PrintToLCDFullLineCentred(4, F("Solid"));
 							break;
 						case SABRE_PULSE:
-							printToLCDFullLineCentred(4, F("Pulse"));
+							PrintToLCDFullLineCentred(4, F("Pulse"));
 							break;
 						case SABRE_THROB:
-							printToLCDFullLineCentred(4, F("Throb"));
+							PrintToLCDFullLineCentred(4, F("Throb"));
 							break;
 					}
 					break;	
 				case 6:
-					printToLCD(0, 2, F(" 6: FX Speed    "));
-					printToLCDFullLineCentred(4, fxSpeed);
+					PrintToLCD(0, 2, F(" 6: FX Speed    "));
+					PrintToLCDFullLineCentred(4, config.fxSpeed);
 					break;	
 				case 7:
-					printToLCD(0, 2, F(" 7: Fade        "));
-					if (sabreFade) {
-						printToLCDFullLineCentred(4, F("On"));
+					PrintToLCD(0, 2, F(" 7: Fade        "));
+					if (config.sabreFade) {
+						PrintToLCDFullLineCentred(4, F("On"));
 					} else {
-						printToLCDFullLineCentred(4, F("Off"));
+						PrintToLCDFullLineCentred(4, F("Off"));
 					}
 					break;	
 			}
@@ -647,12 +867,12 @@ void loop() {
 				if (keypress == KEY_BUTTON) {		// The select key was pressed
 					
 					Serial.println("key button pressed");
+					WriteConfig();
 					loopCounter = 0;				// tell the loop counter to not read another keypress until the main loop, loops another 2000 times
 					interruptPressed = 0;					// User only is displaying image one time 
 					SendSabre();
 						
 					ClearStrip(0);								// after last image is displayed clear the strip
-//					updateScreen = false;						// No need to update screen, lets keep light off, time exposure may still be happening on camera, so no lights from display.
 					
 				} else {
 	
@@ -666,25 +886,25 @@ void loop() {
 						updateScreen = true;
 						switch (menuItem) {
 							case 1:
-								wandMode = WAND_PIXELSTICK;
+								config.wandMode = WAND_PIXELSTICK;
 								break;
 							case 2:
-								brightness = NormaliseVal(brightness + dir, 0, 100, false);
+								config.brightness = NormaliseVal(config.brightness + dir, 0, 100, false);
 								break;
 							case 3:
-								sabreColour = NormaliseVal(sabreColour + dir, 0, 3, true);
+								config.sabreColour = NormaliseVal(config.sabreColour + dir, 0, 3, true);
 								break;
 							case 4:
-								sabreSpeed = NormaliseVal(sabreSpeed + dir, 0, 30, false);
+								config.sabreSpeed = NormaliseVal(config.sabreSpeed + dir, 0, 30, false);
 								break;
 							case 5:
-								sabreMode = NormaliseVal(sabreMode + dir, SABRE_SOLID, SABRE_THROB, true);
+								config.sabreMode = NormaliseVal(config.sabreMode + dir, SABRE_SOLID, SABRE_THROB, true);
 								break;
 							case 6:
-								fxSpeed = NormaliseVal(fxSpeed + dir, 0, 30, false);
+								config.fxSpeed = NormaliseVal(config.fxSpeed + dir, 0, 30, false);
 								break;
 							case 7:
-								sabreFade = !sabreFade;
+								config.sabreFade = !config.sabreFade;
 								break;
 						}	
 					}
@@ -786,21 +1006,21 @@ void SendFile(String Filename) {
 	if (dataFile) {
 		ReadTheFile();
 		dataFile.close();
-		if (interruptPressed >=3) {
+		if (interruptPressed >= 3) {
 			delay (500); // add a delay to prevent select button from starting sequence again.
 		}
 	}	
 	else {
-		printToLCD(0, 6, F("File read error "));
+		PrintToLCD(0, 6, F("File read error "));
 		delay(1000);
-		printToLCD(0, 6, F("                "));
-		setupSDcard();
+		PrintToLCD(0, 6, F("                "));
+		SetupSDcard();
 	}
 }
 
 void DisplayCurrentFilename() {
 	m_CurrentFilename = m_FileNames[m_FileIndex];
-	printToLCDFullLineCentred(4, m_CurrentFilename);
+	PrintToLCDFullLineCentred(4, m_CurrentFilename);
 }
 
 void GetFileNamesFromSD(File dir) {
@@ -819,7 +1039,7 @@ void GetFileNamesFromSD(File dir) {
 				if (CurrentFilename.endsWith(".bmp") || CurrentFilename.endsWith(".BMP") ) { //find files with our extension only
 					if (!CurrentFilename.startsWith("_")) {
 						m_FileNames[fileCount] = entry.name();
-						printToLCDFullLine(0, 6, entry.name());
+						PrintToLCDFullLine(0, 6, entry.name());
 
 						Serial.print("File number ");
 						Serial.print(fileCount);
@@ -847,50 +1067,12 @@ void ClearStrip(int duration) {
 	FastLED.show();
 }
 
-uint32_t readLong() {
-	uint32_t retValue;
-	byte incomingbyte;
-	 
-	incomingbyte=readByte();
-	retValue=(uint32_t)((byte)incomingbyte);
-	 
-	incomingbyte=readByte();
-	retValue+=(uint32_t)((byte)incomingbyte)<<8;
-	 
-	incomingbyte=readByte();
-	retValue+=(uint32_t)((byte)incomingbyte)<<16;
-	 
-	incomingbyte=readByte();
-	retValue+=(uint32_t)((byte)incomingbyte)<<24;
-	 
-	return retValue;
-}
 
-uint16_t readInt() {
-	byte incomingbyte;
-	uint16_t retValue;
-	 
-	incomingbyte=readByte();
-	retValue+=(uint16_t)((byte)incomingbyte);
-	 
-	incomingbyte=readByte();
-	retValue+=(uint16_t)((byte)incomingbyte)<<8;
-	 
-	return retValue;
-}
+void GetRGBwithGamma() {
 	
-int readByte() {
-	int retbyte=-1;
-	while(retbyte<0) 
-		retbyte= dataFile.read();
-	return retbyte;
-}
-
-void getRGBwithGamma() {
-	
-	b = mygamma(readByte())*(brightness *0.01);			// Brian Heiland Revise.	Old formula
-	r = mygamma(readByte())*(brightness *0.01);			// reduced brightness 50% when brightness was changed from 
-	g = mygamma(readByte())*(brightness *0.01);			// 100 to 99 , by 50% brightness was nearly 0 This formula corrects this.
+	b = GammaVal(ReadByte())*(config.brightness *0.01);			// Brian Heiland Revise.	Old formula
+	r = GammaVal(ReadByte())*(config.brightness *0.01);			// reduced brightness 50% when brightness was changed from 
+	g = GammaVal(ReadByte())*(config.brightness *0.01);			// 100 to 99 , by 50% brightness was nearly 0 This formula corrects this.
 
 }
 
@@ -911,38 +1093,38 @@ int FixVal(int v) {
 
 int SetSabreLine(int displayWidth, int currentLength) {
 
-	int sr = sabreColours[sabreColour][0];
-	int sg = sabreColours[sabreColour][1];
-	int sb = sabreColours[sabreColour][2];
+	int sr = sabreColours[config.sabreColour][0];
+	int sg = sabreColours[config.sabreColour][1];
+	int sb = sabreColours[config.sabreColour][2];
 
 	for (int i = 0; i < currentLength; i++) {
 
-		int brt = brightness;
-		if (sabreFade) {
+		int brt = config.brightness;
+		if (config.sabreFade) {
 			brt = (currentLength * brt / displayWidth );
 		}
-		if (sabreMode == SABRE_PULSE) {
+		if (config.sabreMode == SABRE_PULSE) {
 			brt = GetBrightness(displayWidth, brt, i + startPoint, 1);
-		} else if (sabreMode == SABRE_THROB) {
+		} else if (config.sabreMode == SABRE_THROB) {
 			brt = GetBrightness(displayWidth, brt, i, throbVal);
 		}
 		
-		r = mygamma(sr)*(brt *0.01);			// reduced brightness 50% when brightness was changed from 
-		g = mygamma(sg)*(brt *0.01);			// 100 to 99 , by 50% brightness was nearly 0 This formula corrects this.
-		b = mygamma(sb)*(brt *0.01);			// Brian Heiland Revise.	Old formula
+		r = GammaVal(sr)*(brt *0.01);			// reduced brightness 50% when brightness was changed from 
+		g = GammaVal(sg)*(brt *0.01);			// 100 to 99 , by 50% brightness was nearly 0 This formula corrects this.
+		b = GammaVal(sb)*(brt *0.01);			// Brian Heiland Revise.	Old formula
 		leds[i].setRGB(g,r,b);
 	}
 	for (int i = currentLength; i < displayWidth; i++) {
 		leds[i].setRGB(0,0,0);
 	}
 
-	if (sabreMode == SABRE_PULSE) {
+	if (config.sabreMode == SABRE_PULSE) {
 		// I think this should allow us any value below 36 to work OK... // to be continued.. ?
-		startPoint -= fxSpeed;
+		startPoint -= config.fxSpeed;
 		if (startPoint <= 0) {
 			startPoint += 36;
 		}
-	} else if (sabreMode == SABRE_THROB) {
+	} else if (config.sabreMode == SABRE_THROB) {
 		if (throbDir) {
 			throbVal -= 0.1;
 			if (throbVal <= -1) {
@@ -955,7 +1137,7 @@ int SetSabreLine(int displayWidth, int currentLength) {
 			}
 		}
 	}
-	if (sabreMode == SABRE_SOLID) {
+	if (config.sabreMode == SABRE_SOLID) {
 		return 100;
 	}
 	return 1;
@@ -988,9 +1170,9 @@ void SendSabre() {
 	bool shuttingDown = false;
 	int numLit = 0;
 	maxBrightness = 100;
-	clearLCD();
+	ClearLCD();
 
-	if (sabreSpeed == 0) {
+	if (config.sabreSpeed == 0) {
 		startingUp = false;
 		runningSabre = true;
 		numLit = displayWidth;
@@ -1010,7 +1192,7 @@ void SendSabre() {
 			
 			if (interruptPressed >= 4) {										// 3 or more frames have passed with button pressed
 				runningSabre = false;
-				if (sabreSpeed == 0) {
+				if (config.sabreSpeed == 0) {
 					shuttingDown = false;
 				} else {
 					shuttingDown = true;
@@ -1020,7 +1202,7 @@ void SendSabre() {
 		}
 
 		if (startingUp) {
-			numLit += sabreSpeed;
+			numLit += config.sabreSpeed;
 			if (numLit >= displayWidth) {
 				// if we went over the end, just pop back to the end
 				numLit = displayWidth;
@@ -1029,7 +1211,7 @@ void SendSabre() {
 				logBrightness = true;
 			}
 		} else if (shuttingDown) {
-			numLit -= sabreSpeed;
+			numLit -= config.sabreSpeed;
 			if (numLit <= 0) {
 				numLit = 0;
 				shuttingDown = false;
@@ -1047,7 +1229,7 @@ void SendSabre() {
 	}	
 	interruptPressed = 0;
 	updateScreen = true;
-	initLCD();
+	InitLCD();
 }
 
 
@@ -1060,42 +1242,42 @@ void ReadTheFile() {
 	#define MYBMP_BI_RLE4			2L
 	#define MYBMP_BI_BITFIELDS		3L
 
-	uint16_t bmpType = readInt();
-	uint32_t bmpSize = readLong();
-	uint16_t bmpReserved1 = readInt();
-	uint16_t bmpReserved2 = readInt();
-	uint32_t bmpOffBits = readLong();
+	uint16_t bmpType = ReadInt();
+	uint32_t bmpSize = ReadLong();
+	uint16_t bmpReserved1 = ReadInt();
+	uint16_t bmpReserved2 = ReadInt();
+	uint32_t bmpOffBits = ReadLong();
 	bmpOffBits = 54;
-	clearLCD();
+	ClearLCD();
 	 
 	/* Check file header */
 	if (bmpType != MYBMP_BF_TYPE || bmpOffBits != MYBMP_BF_OFF_BITS) {
-//		clearLCD();
-		printToLCD(0, 6, F("  not a bitmap  "));
+//		ClearLCD();
+		PrintToLCD(0, 6, F("  not a bitmap  "));
 		delay(1000);
 		return;
 	}
 	
 	/* Read info header */
-	uint32_t imgSize = readLong();
-	uint32_t imgWidth = readLong();
-	uint32_t imgHeight = readLong();
-	uint16_t imgPlanes = readInt();
-	uint16_t imgBitCount = readInt();
-	uint32_t imgCompression = readLong();
-	uint32_t imgSizeImage = readLong();
-	uint32_t imgXPelsPerMeter = readLong();
-	uint32_t imgYPelsPerMeter = readLong();
-	uint32_t imgClrUsed = readLong();
-	uint32_t imgClrImportant = readLong();
+	uint32_t imgSize = ReadLong();
+	uint32_t imgWidth = ReadLong();
+	uint32_t imgHeight = ReadLong();
+	uint16_t imgPlanes = ReadInt();
+	uint16_t imgBitCount = ReadInt();
+	uint32_t imgCompression = ReadLong();
+	uint32_t imgSizeImage = ReadLong();
+	uint32_t imgXPelsPerMeter = ReadLong();
+	uint32_t imgYPelsPerMeter = ReadLong();
+	uint32_t imgClrUsed = ReadLong();
+	uint32_t imgClrImportant = ReadLong();
 	 
 	/* Check info header */
 	if (imgSize != MYBMP_BI_SIZE || imgWidth <= 0 || imgHeight <= 0 || imgPlanes != 1 || imgBitCount != 24 || imgCompression != MYBMP_BI_RGB || imgSizeImage == 0 ) {
-//		clearLCD();
-		printToLCDFullLine(0, 6, F("Unsupported bmp "));
-		printToLCDFullLine(0, 7, F("(use 24bpp)"));
+//		ClearLCD();
+		PrintToLCDFullLine(0, 6, F("Unsupported bmp "));
+		PrintToLCDFullLine(0, 7, F("(use 24bpp)"));
 		delay(1000);
-		printToLCD(0, 7, F("                "));
+		PrintToLCD(0, 7, F("                "));
 		return;
 	}
 	
@@ -1141,26 +1323,26 @@ void ReadTheFile() {
 		for (int x=0; x < displayWidth; x++) {								// Loop through the x	values of the image
 			uint32_t offset = (MYBMP_BF_OFF_BITS + (((y-1)* lineLength) + (x*3))) ;	
 			dataFile.seek(offset);
-			getRGBwithGamma();
-			if (imageUpsideDown) {
+			GetRGBwithGamma();
+			if (config.imageUpsideDown) {
 				leds[displayWidth - x].setRGB(r,g,b);
 			} else {
 				leds[x].setRGB(r,g,b);
 			}
 		}
 		
-		LatchAndDelay(frameDelay);
+		LatchAndDelay(config.frameDelay);
 
 		pc = (imgHeight - y + 1) * 16 / imgHeight;
 		if (pc != lastpc) {
 			lastpc = pc;
-			printProgressToLCD(pc, 7);
+			PrintProgressToLCD(pc, 7);
 		}
 
 		
-		if (frameBlankDelay > 0) {
+		if (config.frameBlankDelay > 0) {
 			ClearStrip(0);
-			delay(frameBlankDelay);
+			delay(config.frameBlankDelay);
 		}
 		
 		if (interruptPressed >= 3) {										// this code is unreachable clean up and remove when verified not needed Brian Heiland
@@ -1168,13 +1350,13 @@ void ReadTheFile() {
 			break;
 		}
 	}
-	printProgressToLCD(0, 7);
+	PrintProgressToLCD(0, 7);
 	updateScreen = true;
-	initLCD();
+	InitLCD();
 }
 
 // Sort the filenames in alphabetical order
-void isort(String *filenames, int n) {
+void SortFilenames(String *filenames, int n) {
 	for (int i = 1; i < n; ++i) {
 		String j = filenames[i];
 		int k;
@@ -1204,6 +1386,6 @@ const PROGMEM prog_uchar gammaTable[]	= {
 	109,110,111,113,114,115,116,117,118,120,121,122,123,125,126,127
 };
  
-inline byte mygamma(byte x) {
+inline byte GammaVal(byte x) {
 	return pgm_read_byte(&gammaTable[x]);
 }
