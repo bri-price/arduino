@@ -24,17 +24,19 @@ PubSubClient client(espClient);
 DHT_Unified dht(DHTPIN, DHTTYPE);
 
 
-
+#define	PUBLISH_MILLIS	60000
+#define	BASELINE_MILLIS	30000
 unsigned long lastMsg = 0;
+unsigned long lastBaseline = 0;
 char msg[50];
 int value = 0;
 
 #include "Secrets.h"
 
-char ssid2[] = SECRET_SSID;
-char pass2[] = SECRET_PASS;
-char ssid[] = SECRET_SSID2;
-char pass[] = SECRET_PASS2;
+char ssid1[] = SECRET_SSID1;
+char pass1[] = SECRET_PASS1;
+char ssid2[] = SECRET_SSID2;
+char pass2[] = SECRET_PASS2;
 
 uint32_t getAbsoluteHumidity(float temperature, float humidity) {
     // approximation formula from Sensirion SGP30 Driver Integration chapter 3.15
@@ -49,33 +51,57 @@ double lastECO2 = 0;
 double lastTVOC = 0;
 
 
-void initWifi() {
+boolean initWifi(int wifiNum) {
 
-	int startupLED = 1;
-	WiFi.hostname(IOT_NAME);
+	int attempts = 0;
+
 	WiFi.mode(WIFI_OFF);
 	delay(100);
 	WiFi.mode(WIFI_STA);
-  // We start by connecting to a WiFi network
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
+	// We start by connecting to a WiFi network
+	Serial.println();
+	Serial.print("Connecting to ");
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, pass);
+	if (wifiNum == 1) {
+		Serial.println(ssid1);
+	} else {
+		Serial.println(ssid2);
+	}
+	
+	WiFi.mode(WIFI_STA);
+	if (wifiNum == 1) {
+		WiFi.begin(ssid1, pass1);
+	} else {
+		WiFi.begin(ssid2, pass2);
+	}
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
+	while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+		delay(500);
+		Serial.print(".");
+		attempts = attempts + 1;
+	}
 
-  randomSeed(micros());
+	if (WiFi.status() != WL_CONNECTED) {
+		Serial.println("");
+		Serial.println("WiFi failed");
+		return false;
+	}
 
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+	randomSeed(micros());
+
+	Serial.println("");
+	Serial.print("WiFi connected to ");
+	if (wifiNum == 1) {
+		Serial.println(ssid1);
+	} else {
+		Serial.println(ssid2);
+	}
+	Serial.println("IP address: ");
+	Serial.println(WiFi.localIP());
+	delay(100);
+	return true;
 }
+
 
 void callback(char* topic, byte* payload, unsigned int length) {
 
@@ -173,9 +199,16 @@ void setup() {
 	Serial.println(F("------------------------------------"));
 	
 	
-	initWifi();
-  client.setServer(mqtt_server, 1883);
-  client.setCallback(callback);
+	int wifiNum = 2;
+	bool wifiConnected = false;
+
+	while (wifiConnected == false) {
+		wifiNum = 3 - wifiNum;
+		wifiConnected = initWifi(wifiNum);
+	}
+
+	client.setServer(mqtt_server, 1883);
+	client.setCallback(callback);
 }
 
 int counter = 0;
@@ -202,8 +235,9 @@ void loop() {
 		return;
 	}
  
-	counter++;
-	if (counter == 150) {
+	unsigned long now = millis();
+	if (now - lastBaseline > BASELINE_MILLIS) {
+		lastBaseline = now;
 		// we're only going to do this every 30 seconds
 		counter = 0;
 
@@ -239,39 +273,36 @@ void loop() {
 	Serial.print(",");
 	Serial.println(lastECO2);
 
-  unsigned long now = millis();
-  if (now - lastMsg > 5000) {
+	if (now - lastMsg > PUBLISH_MILLIS) {
 
-  	Serial.println("Publishing");
-    lastMsg = now;
-
-    char tempString[8];
-    dtostrf(lastTemp, 1, 2, tempString);
-    Serial.print("Temperature: ");
-    Serial.println(tempString);
-    client.publish("esp32/env-sensor/temperature", tempString, true);
-
-    char humString[8];
-    dtostrf(lastHum, 1, 2, humString);
-    Serial.print("Humidity: ");
-    Serial.println(humString);
-    client.publish("esp32/env-sensor/humidity", humString, true);
-
-    char eco2String[8];
-    dtostrf(lastECO2, 1, 2, eco2String);
-    Serial.print("eCO2: ");
-    Serial.println(eco2String);
-    client.publish("esp32/env-sensor/eco2", eco2String, true);
-
-    char tvocString[8];
-    dtostrf(lastTVOC, 1, 2, tvocString);
-    Serial.print("TVOC: ");
-    Serial.println(tvocString);
-    client.publish("esp32/env-sensor/tvoc", tvocString, true);
-
-  }
-
-	delay(100);
+		Serial.println("Publishing");
+		lastMsg = now;
 	
+		char tempString[8];
+		dtostrf(lastTemp, 1, 2, tempString);
+		Serial.print("Temperature: ");
+		Serial.println(tempString);
+		client.publish("esp32/env-sensor/temperature", tempString, true);
 
+		char humString[8];
+		dtostrf(lastHum, 1, 2, humString);
+		Serial.print("Humidity: ");
+		Serial.println(humString);
+		client.publish("esp32/env-sensor/humidity", humString, true);
+
+		char eco2String[8];
+		dtostrf(lastECO2, 1, 2, eco2String);
+		Serial.print("eCO2: ");
+		Serial.println(eco2String);
+		client.publish("esp32/env-sensor/eco2", eco2String, true);
+
+		char tvocString[8];
+		dtostrf(lastTVOC, 1, 2, tvocString);
+		Serial.print("TVOC: ");
+		Serial.println(tvocString);
+		client.publish("esp32/env-sensor/tvoc", tvocString, true);
+
+	}
+
+	delay(1000);
 }

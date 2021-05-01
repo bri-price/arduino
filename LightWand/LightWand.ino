@@ -21,8 +21,8 @@ typedef unsigned char prog_uchar;
 #define SERIAL_BAUD 115200
 #define LOOP_CYCLES 2000
 
-#define ESP32
-//#define NANOIOT
+//#define ESP32
+#define NANOIOT
 // ******************************************** PIN ASSIGNMENTS  *******************************
 
 #ifdef ESP32
@@ -148,28 +148,29 @@ CRGB leds[NUM_LEDS];
 
 /*
 void InitFlashStorage() {
-		frameDelay = frame_delay.read();
-		if (frameDelay == 0) {
-			frameDelay = 15;
-		}
+
+	frameDelay = frame_delay.read();
+	if (frameDelay == 0) {
+		frameDelay = 15;
+	}
 		
-		initDelay = init_delay.read();
-		repeat = repeat_num.read();
-		repeatDelay = repeat_delay.read();
-		repeatTimes = repeat_times.read();
-		if (repeatTimes == 0) {
-			repeatTimes = 1;
-		}
-		brightness = bright_val.read();  // <-- save the age
-		if (brightness == 0) {
-			brightness = 85;
-		}
+	initDelay = init_delay.read();
+	repeat = repeat_num.read();
+	repeatDelay = repeat_delay.read();
+	repeatTimes = repeat_times.read();
+	if (repeatTimes == 0) {
+		repeatTimes = 1;
+	}
+	brightness = bright_val.read();  // <-- save the age
+	if (brightness == 0) {
+		brightness = 85;
+	}
 	
-		cycleAllImages = cycle_all.read();
-		imageRightToLeft = right_to_left.read();
-		imageUpsideDown = upside_down.read();
+	cycleAllImages = cycle_all.read();
+	imageRightToLeft = right_to_left.read();
+	imageUpsideDown = upside_down.read();
 	
-		wandMode = wand_mode.read();
+	wandMode = wand_mode.read();
 }
 
 void UpdateFlashStorage() {
@@ -226,8 +227,11 @@ void printToLCDFullLine(int col, int row, int ival) {
 	printToLCDFullLine(col, row, s);
 }
 
-void printToLCDFullLineCentred(int row, int ival) {
+void printToLCDFullLineCentred(int row, int ival, bool perc = false) {
 	String s = String(ival);
+	if (perc) {
+		s += "%";
+	}
 	printToLCDFullLineCentred(row, s);
 }
 
@@ -285,9 +289,12 @@ void printToLCDFullLine(int col, int row, String  message) {
 
 void printProgressToLCD(int cols, int row) {
 
-	String blank = "                ";
+	String blank = "----------------";
+	if (cols == 0) {
+		 blank = "                ";
+	}
 	for (int i = 0; i < cols; i++) {
-		blank.setCharAt(i, '-');
+		blank.setCharAt(i, ' ');
 	}
 
 	const char *mes = blank.c_str();
@@ -296,8 +303,9 @@ void printProgressToLCD(int cols, int row) {
 
 void setupLEDs() {
 	LEDS.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS);
-	LEDS.setBrightness(84);
+	LEDS.setBrightness(brightness);
 }
+
 
 bool setupSDcard() {
 
@@ -321,6 +329,10 @@ bool setupSDcard() {
 	}
 	printToLCD(0, 4, F("  SD init done  "));
 	return true;
+}
+
+void readValuesFromSD() {
+  File dataFile = SD.open("datalog.txt", FILE_WRITE);
 }
 
 void readSDcard() {
@@ -372,12 +384,7 @@ void loop() {
 					break;	
 				case 3:
 					printToLCD(0, 2, F(" 3: Brightness  "));
-					printToLCDFullLine(4, 4, brightness);
-					if (brightness == 100) {
-						printToLCD(9, 4, F("%"));
-					} else {
-						printToLCD(8, 4, F("%"));
-					}
+					printToLCDFullLineCentred(4, brightness, true);
 					break;	
 				case 4:
 					printToLCD(0, 2, F(" 4: Init Delay  "));
@@ -565,12 +572,14 @@ void loop() {
 					break;	
 				case 2:
 					printToLCD(0, 2, F(" 2: Brightness  "));
-					printToLCDFullLineCentred(4, brightness);
+					printToLCDFullLineCentred(4, brightness, true);
+					/*
 					if (brightness == 100) {
-						printToLCD(9, 4, F("%"));
+						printToLCD(7, 4, F("% "));
 					} else {
-						printToLCD(8, 4, F("%"));
+						printToLCD(6, 4, F("%" ));
 					}
+					*/
 					break;	
 				case 3:
 					printToLCD(0, 2, F(" 3: Colour      "));
@@ -791,7 +800,7 @@ void SendFile(String Filename) {
 
 void DisplayCurrentFilename() {
 	m_CurrentFilename = m_FileNames[m_FileIndex];
-	printToLCD(0, 4, m_CurrentFilename);
+	printToLCDFullLineCentred(4, m_CurrentFilename);
 }
 
 void GetFileNamesFromSD(File dir) {
