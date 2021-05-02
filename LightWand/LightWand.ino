@@ -364,9 +364,10 @@ bool WriteConfig() {
 		writeBool(config.sabreFade);
 
 		dataFile.close();
-	} else {
-		Serial.println("Failed to open config.bin for writing");
+		return true;
 	}
+	Serial.println("Failed to open config.bin for writing");
+	return false;
 }
 
 
@@ -424,14 +425,14 @@ void ClearLCD(void) {
 void SetupLCDdisplay() {
 	u8x8.begin();
 	u8x8.setFont(u8x8_font_chroma48medium8_r);
-	PrintToLCD(0, 0, F("-PIXELWAND V1.2-"));
+	PrintToLCD(0, 0, F("-PIXELWAND V1.3-"));
 	PrintToLCD(2, 1, F("Initializing"));
 	delay(200);	
 }
 
 void InitLCD() {
 	ClearLCD();
-	PrintToLCD(0, 0, F("-PIXELWAND V1.2-"));
+	PrintToLCD(0, 0, F("-PIXELWAND V1.3-"));
 }
 
 void SetupJoystick() {
@@ -531,7 +532,7 @@ void PrintProgressToLCD(int cols, int row) {
 
 void SetupLEDs() {
 	LEDS.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS);
-	LEDS.setBrightness(config.brightness);
+	LEDS.setBrightness(84);
 }
 
 
