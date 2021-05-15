@@ -22,6 +22,11 @@
 
 #include "Secrets.h"
 
+char ssid1[] = SECRET_SSID1;
+char pass1[] = SECRET_PASS1;
+char ssid2[] = SECRET_SSID2;
+char pass2[] = SECRET_PASS2;
+
 // optocouplers
 #define CAMERA_PIN		18
 #define FOCUS_PIN		5
@@ -72,12 +77,67 @@ int	maxSidewaysDelay = 1000;
 double accelerationFactor = 1.3;
 int accelerationTimerStart = 10;
 int accelerationTimer = 0;
+boolean CameraTest = false;
+boolean SolenoidTest = false;
+
 
 U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(SCL, SDA, U8X8_PIN_NONE);	 // OLEDs without Reset of the Display
 
 AsyncWebServer server(80);
 
-void InitWiFi() {
+
+boolean initWifi(int wifiNum) {
+
+	int attempts = 0;
+
+	WiFi.mode(WIFI_OFF);
+	delay(100);
+	WiFi.mode(WIFI_STA);
+	// We start by connecting to a WiFi network
+	Serial.println();
+	Serial.print("Connecting to ");
+
+	if (wifiNum == 1) {
+		Serial.println(ssid1);
+	} else {
+		Serial.println(ssid2);
+	}
+	
+	WiFi.mode(WIFI_STA);
+	if (wifiNum == 1) {
+		WiFi.begin(ssid1, pass1);
+	} else {
+		WiFi.begin(ssid2, pass2);
+	}
+
+	while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+		delay(500);
+		Serial.print(".");
+		attempts = attempts + 1;
+	}
+
+	if (WiFi.status() != WL_CONNECTED) {
+		Serial.println("");
+		Serial.println("WiFi failed");
+		return false;
+	}
+
+	randomSeed(micros());
+
+	Serial.println("");
+	Serial.print("WiFi connected to ");
+	if (wifiNum == 1) {
+		Serial.println(ssid1);
+	} else {
+		Serial.println(ssid2);
+	}
+	Serial.println("IP address: ");
+	Serial.println(WiFi.localIP());
+	delay(100);
+	return true;
+}
+
+void InitWiFiOld() {
 
 	Serial.println("Initialising wifi");
 	PrintToOLED(0, 2, F("Connecting wifi "));
@@ -282,7 +342,18 @@ void setup() {
 	InitSettings();
 	InitGPIO();
 	InitOLED();
-	InitWiFi();
+	
+	
+	int wifiNum = 2;
+	bool wifiConnected = false;
+
+	while (wifiConnected == false) {
+		wifiNum = 3 - wifiNum;
+		wifiConnected = initWifi(wifiNum);
+	}
+//	InitWiFi();
+
+	
 	InitServer();
 
 	delay(1000);
@@ -339,6 +410,26 @@ void loop() {
 			case 10:
 				PrintToOLED(0, 3, F("Save settings ? "));
 				PrintToOLEDFullLine(4, 6, " ");
+				break;
+			case 11:
+				PrintToOLED(0, 3, F("Test Camera     "));
+				if (CameraTest) {
+					PrintToOLEDFullLine(4, 6, "On");
+				} else {
+					PrintToOLEDFullLine(4, 6, "Off");
+				}
+				break;
+			case 12:
+				PrintToOLED(0, 3, F("Test Flash      "));
+				PrintToOLEDFullLine(4, 6, " ");
+				break;
+			case 13:
+				PrintToOLED(0, 3, F("Test Solenoid   "));
+				if (SolenoidTest) {
+					PrintToOLEDFullLine(4, 6, "On");
+				} else {
+					PrintToOLEDFullLine(4, 6, "Off");
+				}
 				break;
 		}
 	}
@@ -415,6 +506,15 @@ void loop() {
 				PrintToOLEDFullLine(4, 6, "saved");
 				updateScreen = false;
 				break;
+			case 11:
+				TestCamera();
+				break;
+			case 12:
+				TestFlash();
+				break;
+			case 13:
+				TestSolenoid();
+				break;
 		}
 		lastJoyLeft = thisJoyLeft;
 		lastJoyRight = thisJoyRight;
@@ -446,11 +546,17 @@ void loop() {
 
 		// loop around
 		if (menuItem == 0) {
-			menuItem = 10;	
-		} else if (menuItem == 11) {
+			menuItem = 13;	
+		} else if (menuItem == 14) {
 			menuItem = 1;
 		}
 		delayVal = downwardsDelay;
+
+		CameraTest = false;
+		SolenoidTest = false;
+
+		digitalWrite(CAMERA_PIN, LOW);
+		digitalWrite(SOLENOID_PIN, LOW);
 
 	} else {
 
@@ -460,10 +566,14 @@ void loop() {
 		if (midState == LOW) {
 			TakeAPhoto();
 		}
-		digitalWrite(CAMERA_PIN, LOW);
+		if (CameraTest == false) {
+			digitalWrite(CAMERA_PIN, LOW);
+		}
 		digitalWrite(FOCUS_PIN, LOW);
 		digitalWrite(FLASH_PIN, LOW);
-		digitalWrite(SOLENOID_PIN, LOW);
+		if (SolenoidTest == false) {
+			digitalWrite(SOLENOID_PIN, LOW);
+		}
 	}
 }
 
@@ -530,6 +640,44 @@ void TakeAPhoto() {
 	Serial.println("Done sequence");
 
 	updateScreen = true;
+}
+
+void TestCamera() {
+
+	Serial.println("Testing camera");
+
+	if (CameraTest == false) {
+		Serial.println("Setting camera pin HIGH");
+		digitalWrite(CAMERA_PIN, HIGH);									//trigger the camera, which should be in bulb mode
+	} else {
+		Serial.println("Setting camera pin LOW");
+		digitalWrite(CAMERA_PIN, LOW);									//trigger the camera, which should be in bulb mode
+	}
+	CameraTest = !CameraTest;
+}
+
+void TestSolenoid() {
+
+	Serial.println("Testing solenoid");
+
+	if (SolenoidTest == false) {
+		Serial.println("Setting solenoid pin HIGH");
+		digitalWrite(SOLENOID_PIN, HIGH);									//trigger the camera, which should be in bulb mode
+	} else {
+		Serial.println("Setting solenoid pin LOW");
+		digitalWrite(SOLENOID_PIN, LOW);									//trigger the camera, which should be in bulb mode
+	}
+	SolenoidTest = !SolenoidTest;
+}
+
+void TestFlash() {
+	
+	Serial.println("Setting flash pin HIGH");
+	digitalWrite(FLASH_PIN, HIGH);									// trigger the flash
+
+	delay(flashDuration);											// keep flash trigger pin high long enough to trigger flash
+	Serial.println("Setting flash pin LOW");
+	digitalWrite(FLASH_PIN, LOW);									// turn off flash trigger
 }
 
 
