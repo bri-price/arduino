@@ -45,14 +45,14 @@ char pass2[] = SECRET_PASS2;
 // OLED uses standard pins for SCL and SDA
 
 // configurable values - saved in eeprom
-int dropOneSize = 100;
-int dropTwoSize = 100;
+int dropOneSize = 95;
+int dropTwoSize = 95;
 
 int delayBeforeShooting = 1000;
-int delayBeforeDrops = 500;
-int delayBetweenDrops = 88;
-int delayBeforeFlash = 333;
-int delayAfterShooting = 300;
+int delayBeforeDrops = 100;
+int delayBetweenDrops = 100;
+int delayBeforeFlash = 300;
+int delayAfterShooting = 100;
 
 int flashDuration = 5;
 int screenTimeout = 5;
