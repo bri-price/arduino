@@ -31,6 +31,9 @@ char pass2[] = SECRET_PASS2;
 #define CAMERA_PIN		18
 #define FOCUS_PIN		5
 #define FLASH_PIN		19
+#define LASER_PIN		32
+#define LASER_DETECT	35
+#define TOUCH_FIRE		33
 
 // solenoid
 #define SOLENOID_PIN	13
@@ -41,6 +44,10 @@ char pass2[] = SECRET_PASS2;
 #define JOY_LEFT_PIN	27
 #define JOY_RIGHT_PIN	26
 #define JOY_MID_PIN		25
+
+// 0,2,4,15,32,33 are touch pins
+// 34,35,36,39 are input only
+
 
 // OLED uses standard pins for SCL and SDA
 
@@ -53,12 +60,14 @@ int delayBeforeDrops = 100;
 int delayBetweenDrops = 100;
 int delayBeforeFlash = 300;
 int delayAfterShooting = 100;
+int delayAfterLaser = 50;
 
 int flashDuration = 5;
 int screenTimeout = 5;
-bool useTwoDrops = true;
+bool useTwoDrops = false;
+bool useLaser = false;
 
-#define EEPROM_SIZE 45
+#define EEPROM_SIZE 50
 
 // run time values
 bool joystickRight = true;
@@ -71,8 +80,8 @@ boolean updateScreen = true;
 
 int delayVal = 0;
 int	downwardsDelay = 500;
-int	sidewaysDelay = 1000;
-int	maxSidewaysDelay = 1000;
+int	sidewaysDelay = 500;
+int	maxSidewaysDelay = 500;
 
 double accelerationFactor = 1.3;
 int accelerationTimerStart = 10;
@@ -137,31 +146,6 @@ boolean initWifi(int wifiNum) {
 	return true;
 }
 
-void InitWiFiOld() {
-
-	Serial.println("Initialising wifi");
-	PrintToOLED(0, 2, F("Connecting wifi "));
-	WiFi.mode(WIFI_STA);
-	WiFi.begin(SECRET_SSID2 , SECRET_PASS2 );
-	Serial.print("  - connecting to WiFi ..");
-	int col = 0;
-	while (WiFi.status() != WL_CONNECTED) {
-		PrintToOLED(col, 3, F("."));
-		Serial.print('.');
-		delay(1000);
-		col = col + 1;
-		if (col == 16) {
-			col = 0;
-			PrintToOLED(0, 3, F("								"));
-		}
-	}
-	Serial.println("");
-	Serial.print(F("  - connected on IP:"));
-	Serial.println(WiFi.localIP());
-	PrintToOLED(0, 3, F("Connected on IP:"));
-	PrintToOLED(0, 4, WiFi.localIP());
-}
-
 void InitServer() {
 	
 	Serial.println("Initialising server");
@@ -174,18 +158,27 @@ void InitServer() {
 			paramVal = request->getParam("drop1")->value();
 			dropOneSize = paramVal.toInt();
 		}
+		
 		if (request->hasParam("drop2")) {
 			paramVal = request->getParam("drop2")->value();
 			dropTwoSize = paramVal.toInt();
 		}
+		
 		if (request->hasParam("predelay")) {
 			paramVal = request->getParam("predelay")->value();
 			delayBeforeShooting = paramVal.toInt();
 		}
+		
 		if (request->hasParam("postdelay")) {
 			paramVal = request->getParam("postdelay")->value();
 			delayAfterShooting = paramVal.toInt();
 		}
+		
+		if (request->hasParam("laserdelay")) {
+			paramVal = request->getParam("laserdelay")->value();
+			delayAfterLaser = paramVal.toInt();
+		}
+		
 		if (request->hasParam("dropdelay")) {
 			paramVal = request->getParam("dropdelay")->value();
 			delayBeforeDrops = paramVal.toInt();
@@ -199,16 +192,19 @@ void InitServer() {
 			paramVal = request->getParam("flashdelay")->value();
 			delayBeforeFlash = paramVal.toInt();
 		}
+
 		if (request->hasParam("flashduration")) {
 			paramVal = request->getParam("flashduration")->value();
 			flashDuration = paramVal.toInt();
 		}
+		
 		if (request->hasParam("screentimeout")) {
 			paramVal = request->getParam("screentimeout")->value();
 			screenTimeout = paramVal.toInt();
 		}
+		
 		if (request->hasParam("twodrops")) {
-			paramVal = request->getParam("screentimeout")->value();
+			paramVal = request->getParam("twodrops")->value();
 			paramVal.toLowerCase();
 			if (paramVal == "true" || paramVal == "yes" || paramVal == "1") {
 				useTwoDrops = true;
@@ -216,20 +212,30 @@ void InitServer() {
 				useTwoDrops = false;
 			}
 		}
+		
+		if (request->hasParam("laser")) {
+			paramVal = request->getParam("laser")->value();
+			paramVal.toLowerCase();
+			if (paramVal == "true" || paramVal == "yes" || paramVal == "1") {
+				useLaser = true;
+			} else {
+				useLaser = false;
+			}
+		}
 
-		request->send(200, "text/plain", "OK");
-	});
-	server.on("/shoot", HTTP_GET, [](AsyncWebServerRequest *request){
-		TakeAPhoto();
 		request->send(200, "text/plain", "OK");
 	});
 	
-	PrintToOLED(0, 6, F("	Start server	"));
+	server.on("/shoot", HTTP_GET, [](AsyncWebServerRequest *request){
+		RunSequence();
+		request->send(200, "text/plain", "OK");
+	});
+	
+	PrintToOLED(0, 6, F("  Start server  "));
 	server.begin();
 }
 
-unsigned long eeprom_crc()
-{
+unsigned long eeprom_crc() {
 	const unsigned long crc_table[16] = {
 		0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
 		0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
@@ -254,7 +260,7 @@ void InitSettings() {
 	EEPROM.begin(EEPROM_SIZE);
 	unsigned long calculatedCrc = eeprom_crc();
 	unsigned long storedCrc;
-	EEPROM.get(37, storedCrc);
+	EEPROM.get(42, storedCrc);
 	if (storedCrc != calculatedCrc) {
 		Serial.println("  - Mismatched CRC, saving default values");
 		// they don't match, so let's save the default values
@@ -273,6 +279,8 @@ void InitSettings() {
 	EEPROM.get(28, flashDuration);
 	EEPROM.get(32, screenTimeout);
 	EEPROM.get(36, useTwoDrops);
+	EEPROM.get(37, useLaser);
+	EEPROM.get(38, delayAfterLaser);
 }
 
 void SaveSettings() {
@@ -288,11 +296,13 @@ void SaveSettings() {
 	EEPROM.put(28, flashDuration);
 	EEPROM.put(32, screenTimeout);
 	EEPROM.put(36, useTwoDrops);
+	EEPROM.put(37, useLaser);
+	EEPROM.put(38, delayAfterLaser);
 	EEPROM.commit();
 	
 	unsigned long calculatedCrc = eeprom_crc();
 	// save calculated CRC to eeprom
-	EEPROM.put(37, calculatedCrc);
+	EEPROM.put(42, calculatedCrc);
 	EEPROM.commit();
 }
 
@@ -327,7 +337,10 @@ void InitGPIO() {
 	pinMode(JOY_MID_PIN, INPUT_PULLUP);
 	digitalWrite(JOY_MID_PIN, HIGH);
 
-	
+	pinMode(LASER_DETECT, INPUT);
+
+	digitalWrite(JOY_MID_PIN, HIGH);
+	pinMode(LASER_PIN, LOW);
 }
 
 void InitSerial() {
@@ -351,8 +364,6 @@ void setup() {
 		wifiNum = 3 - wifiNum;
 		wifiConnected = initWifi(wifiNum);
 	}
-//	InitWiFi();
-
 	
 	InitServer();
 
@@ -372,14 +383,22 @@ void loop() {
 				PrintToOLEDFullLine(4, 6, delayBeforeShooting);
 				break;
 			case 2:
+				PrintToOLED(0, 3, F("Use laser       "));
+				if (useLaser) {
+					PrintToOLEDFullLine(4, 6, F("Yes"));
+				} else {
+					PrintToOLEDFullLine(4, 6, F("No ")); 
+				} 
+				break;
+			case 3:
 				PrintToOLED(0, 3, F("Pre-drop delay "));
 				PrintToOLEDFullLine(4, 6, delayBeforeDrops);
 				break;
-			case 3:
+			case 4:
 				PrintToOLED(0, 3, F("First drop size "));
 				PrintToOLEDFullLine(4, 6, dropOneSize);
 				break;
-			case 4:
+			case 5:
 				PrintToOLED(0, 3, F("Use two drops   "));
 				if (useTwoDrops) {
 					PrintToOLEDFullLine(4, 6, F("Yes"));
@@ -387,31 +406,35 @@ void loop() {
 					PrintToOLEDFullLine(4, 6, F("No ")); 
 				} 
 				break;
-			case 5:
+			case 6:
 				PrintToOLED(0, 3, F("Second drop size"));
 				PrintToOLEDFullLine(4, 6, dropTwoSize);
 				break;
-			case 6:
+			case 7:
 				PrintToOLED(0, 3, F("Inter drop delay"));
 				PrintToOLEDFullLine(4, 6, delayBetweenDrops);
 				break;
-			case 7:
+			case 8:
 				PrintToOLED(0, 3, F("Pre-flash delay "));
 				PrintToOLEDFullLine(4, 6, delayBeforeFlash);
 				break;
-			case 8:
+			case 9:
+				PrintToOLED(0, 3, F("Post-laser delay"));
+				PrintToOLEDFullLine(4, 6, delayAfterLaser);
+				break;
+			case 10:
 				PrintToOLED(0, 3, F("Post shoot delay"));
 				PrintToOLEDFullLine(4, 6, delayAfterShooting);
 				break;
-			case 9:
+			case 11:
 				PrintToOLED(0, 3, F("Screen timeout  "));
 				PrintToOLEDFullLine(4, 6, screenTimeout);
 				break;
-			case 10:
+			case 12:
 				PrintToOLED(0, 3, F("Save settings ? "));
 				PrintToOLEDFullLine(4, 6, " ");
 				break;
-			case 11:
+			case 13:
 				PrintToOLED(0, 3, F("Test Camera     "));
 				if (CameraTest) {
 					PrintToOLEDFullLine(4, 6, "On");
@@ -419,17 +442,21 @@ void loop() {
 					PrintToOLEDFullLine(4, 6, "Off");
 				}
 				break;
-			case 12:
+			case 14:
 				PrintToOLED(0, 3, F("Test Flash      "));
 				PrintToOLEDFullLine(4, 6, " ");
 				break;
-			case 13:
+			case 15:
 				PrintToOLED(0, 3, F("Test Solenoid   "));
 				if (SolenoidTest) {
 					PrintToOLEDFullLine(4, 6, "On");
 				} else {
 					PrintToOLEDFullLine(4, 6, "Off");
 				}
+				break;
+			case 16:
+				PrintToOLED(0, 3, F("Align Laser     "));
+				PrintToOLEDFullLine(4, 6, " ");
 				break;
 		}
 	}
@@ -441,6 +468,8 @@ void loop() {
 		delay(delayVal);
 		delayVal = 0;
 	}
+
+	int thisTouch = analogRead(TOUCH_FIRE);
 
 	int thisJoyUp = digitalRead(JOY_UP_PIN);
 	int thisJoyDown = digitalRead(JOY_DOWN_PIN);
@@ -478,42 +507,51 @@ void loop() {
 				delayBeforeShooting = NormaliseIntVal(delayBeforeShooting, 10, 0, 5000);
 				break;
 			case 2:
-				delayBeforeDrops = NormaliseIntVal(delayBeforeDrops, 10, 0, 5000);
+				useLaser = !useLaser;
 				break;
 			case 3:
-				dropOneSize = NormaliseIntVal(dropOneSize, 1, 10, 300);
+				delayBeforeDrops = NormaliseIntVal(delayBeforeDrops, 10, 0, 5000);
 				break;
 			case 4:
-				useTwoDrops = !useTwoDrops;
+				dropOneSize = NormaliseIntVal(dropOneSize, 1, 10, 300);
 				break;
 			case 5:
-				dropTwoSize = NormaliseIntVal(dropTwoSize, 1, 10, 300);
+				useTwoDrops = !useTwoDrops;
 				break;
 			case 6:
-				delayBetweenDrops = NormaliseIntVal(delayBetweenDrops, 1, 10, 2000);
+				dropTwoSize = NormaliseIntVal(dropTwoSize, 1, 10, 300);
 				break;
 			case 7:
-				delayBeforeFlash = NormaliseIntVal(delayBeforeFlash, 1, 10, 2000);
+				delayBetweenDrops = NormaliseIntVal(delayBetweenDrops, 1, 10, 2000);
 				break;
 			case 8:
-				delayAfterShooting = NormaliseIntVal(delayAfterShooting, 1, 0, 5000);
+				delayBeforeFlash = NormaliseIntVal(delayBeforeFlash, 1, 10, 2000);
 				break;
 			case 9:
-				screenTimeout = NormaliseIntVal(screenTimeout, 1, 1, 20);
+				delayAfterLaser = NormaliseIntVal(delayAfterLaser, 1, 10, 2000);
 				break;
 			case 10:
+				delayAfterShooting = NormaliseIntVal(delayAfterShooting, 1, 0, 5000);
+				break;
+			case 11:
+				screenTimeout = NormaliseIntVal(screenTimeout, 1, 1, 20);
+				break;
+			case 12:
 				SaveSettings();
 				PrintToOLEDFullLine(4, 6, "saved");
 				updateScreen = false;
 				break;
-			case 11:
+			case 13:
 				TestCamera();
 				break;
-			case 12:
+			case 14:
 				TestFlash();
 				break;
-			case 13:
+			case 15:
 				TestSolenoid();
+				break;
+			case 16:
+				RunLaserAlignment();
 				break;
 		}
 		lastJoyLeft = thisJoyLeft;
@@ -534,20 +572,27 @@ void loop() {
 		// we are not using two drops
 		if (thisJoyDown == LOW) {
 			menuItem++;
-			if ((useTwoDrops == false) && (menuItem == 5 || menuItem == 6)) {
-				menuItem = 7;
+			if ((useTwoDrops == false) && (menuItem == 6 || menuItem == 7)) {
+				menuItem = 8;
+			}
+
+			if (useLaser == true && menuItem > 2 && menuItem < 9) {
+				menuItem = 9;
 			}
 		} else {
 			menuItem--;
-			if ((useTwoDrops == false) && (menuItem == 5 || menuItem == 6)) {
-				menuItem = 4;
+			if ((useTwoDrops == false) && (menuItem == 6 || menuItem == 7)) {
+				menuItem = 5;
+			}
+			if (useLaser == true && menuItem > 2 && menuItem < 9) {
+				menuItem = 2;
 			}
 		}
 
 		// loop around
 		if (menuItem == 0) {
-			menuItem = 13;	
-		} else if (menuItem == 14) {
+			menuItem = 16;	
+		} else if (menuItem == 17) {
 			menuItem = 1;
 		}
 		delayVal = downwardsDelay;
@@ -564,7 +609,7 @@ void loop() {
 
 		int midState = digitalRead(JOY_MID_PIN);
 		if (midState == LOW) {
-			TakeAPhoto();
+			RunSequence();
 		}
 		if (CameraTest == false) {
 			digitalWrite(CAMERA_PIN, LOW);
@@ -595,11 +640,18 @@ void ClearScreen() {
 	u8x8.clearDisplay();
 }
 
-void TakeAPhoto() {
+void RunSequence() {
+	if (useLaser) {
+		RunLaserSequence();
+	} else {
+		RunDropperSequence();
+	}
+}
 
-	Serial.println("Running photo sequence");
+void RunDropperSequence() {
+
+	Serial.println("Running dropper sequence");
 	ClearScreen();													// want the screen off when shooting
-
 	
 	delay(delayBeforeShooting);
 
@@ -642,10 +694,129 @@ void TakeAPhoto() {
 	updateScreen = true;
 }
 
+void RunLaserSequence() {
+
+	Serial.println("Running laser sequence");
+	ClearScreen();													// want the screen off when shooting
+	
+	delay(delayBeforeShooting);
+
+	Serial.println("Setting camera pin HIGH");
+	digitalWrite(CAMERA_PIN, HIGH);									//trigger the camera, which should be in bulb mode
+
+	bool isArmed = false;
+	bool isTriggered = false;
+	bool isCancelled = false;
+
+	PrintToOLED(0, 6, F("  Align laser   "));
+
+	// getting ready
+	while (isArmed == false && isCancelled == false) {
+
+		int midState = digitalRead(JOY_MID_PIN);
+		if (midState == LOW) {
+			isCancelled = true;
+		} else {
+
+		 	int detected = digitalRead(LASER_DETECT);				// read Laser sensor
+			if (detected == HIGH) {
+				isArmed = true;
+			} else {
+				delay(100);
+			}
+		} else {
+			delay(100);
+		}
+	}
+
+	if (isCancelled) {
+		Serial.println("Setting camera pin LOW");
+		digitalWrite(CAMERA_PIN, LOW);									//trigger the camera, which should be in bulb mode
+		updateScreen = true;
+		return;
+	}
+
+	PrintToOLED(0, 6, F(" Laser aligned  "));
+	delay(1000);
+
+	ClearScreen();													// want the screen off when shooting
+
+	// system is armed - now wait for it to be triggered - no delays on this bit
+	while (isTriggered == false && isCancelled == false) {
+
+	 	int detected = digitalRead(LASER_DETECT);				// read Laser sensor
+		if (detected == LOW) {
+			isTriggered = true;
+		} else {
+			int midState = digitalRead(JOY_MID_PIN);
+			if (midState == LOW) {
+				isCancelled = true;										// user can cancel sequence using the same button as to start
+			}
+		}
+	}
+
+	if (isCancelled) {
+		Serial.println("Setting camera pin LOW");
+		digitalWrite(CAMERA_PIN, LOW);									//trigger the camera, which should be in bulb mode
+		updateScreen = true;
+		return;
+	}
+
+
+	delay(delayAfterLaser);											// wait the flash delay time to trigger flash
+	Serial.println("Setting flash pin HIGH");
+	digitalWrite(FLASH_PIN, HIGH);									// trigger the flash
+
+	delay(flashDuration);											// keep flash trigger pin high long enough to trigger flash
+	Serial.println("Setting flash pin LOW");
+	digitalWrite(FLASH_PIN, LOW);									// turn off flash trigger
+
+	delay(delayAfterShooting);										// wait the flash delay time to trigger flash
+	Serial.println("Setting camera pin LOW");
+	digitalWrite(CAMERA_PIN, LOW);									//trigger the camera, which should be in bulb mode
+
+	delay(100);														// keeps the system in a pause mode to avoid false triggers
+	Serial.println("Done sequence");
+
+	updateScreen = true;
+}
+
+void RunLaserAlignment() {
+
+	Serial.println("Running laser alignment");
+	ClearScreen();													// want the screen off when shooting
+	
+	bool isArmed = false;
+	bool isCancelled = false;
+	PrintToOLED(0, 3, F("  Align laser   "));
+
+
+	// getting ready
+	while (isCancelled == false) {
+
+		int midState = digitalRead(JOY_MID_PIN);
+		if (midState == LOW) {
+			isCancelled = true;
+		}
+		
+	 	int detected = digitalRead(LASER_DETECT);				// read Laser sensor
+		if (detected == HIGH) {
+			PrintToOLED(0, 6, F(" Laser aligned  "));
+		} else {
+			PrintToOLED(0, 6, F(" -------------  "));
+		}
+
+		if (isCancelled == false) {
+			delay(100);
+		}
+	}
+
+	ClearScreen();													// want the screen off when shooting
+	updateScreen = true;
+}
+
 void TestCamera() {
-
 	Serial.println("Testing camera");
-
 	if (CameraTest == false) {
 		Serial.println("Setting camera pin HIGH");
 		digitalWrite(CAMERA_PIN, HIGH);									//trigger the camera, which should be in bulb mode
@@ -657,9 +828,7 @@ void TestCamera() {
 }
 
 void TestSolenoid() {
-
 	Serial.println("Testing solenoid");
-
 	if (SolenoidTest == false) {
 		Serial.println("Setting solenoid pin HIGH");
 		digitalWrite(SOLENOID_PIN, HIGH);									//trigger the camera, which should be in bulb mode
@@ -671,15 +840,14 @@ void TestSolenoid() {
 }
 
 void TestFlash() {
-	
 	Serial.println("Setting flash pin HIGH");
 	digitalWrite(FLASH_PIN, HIGH);									// trigger the flash
 
 	delay(flashDuration);											// keep flash trigger pin high long enough to trigger flash
+
 	Serial.println("Setting flash pin LOW");
 	digitalWrite(FLASH_PIN, LOW);									// turn off flash trigger
 }
-
 
 int NormaliseIntVal(int v, int stepamount, int minimum, int maximum) {
 
@@ -699,14 +867,12 @@ int NormaliseIntVal(int v, int stepamount, int minimum, int maximum) {
 
 
 void PrintToOLED(int col, int row, int ival) {
-
 	String s = String(ival);
 	const char *mes = s.c_str();
 	PrintToOLED(col, row, mes);
 }
 
 void PrintToOLEDFullLine(int col, int row, int ival) {
-
 	String s = String(ival);
 	PrintToOLEDFullLine(col, row, s);
 }
@@ -717,7 +883,6 @@ void PrintToOLEDFullLine(int col, int row, const char * message) {
 }
 
 void PrintToOLED(int col, int row, String	message) {
-
 	const char *mes = message.c_str();
 	PrintToOLED(col, row, mes);
 }
@@ -727,7 +892,6 @@ void PrintToOLED(int col, int row, const char * message) {
 }
 
 void PrintToOLEDFullLine(int col, int row, String	message) {
-
 	String blank = "                ";
 	int charsAvailable = 16 - col;
 
