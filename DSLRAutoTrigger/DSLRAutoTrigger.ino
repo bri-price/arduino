@@ -133,6 +133,7 @@ bool solenoidTestIsRunning = false;
 // OLED uses standard pins for SCL and SDA
 U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(SCL, SDA, U8X8_PIN_NONE);	 // OLEDs without Reset of the Display
 
+// Run a web server on port 80
 AsyncWebServer server(80);
 
 boolean InitWifiSSID(char *ssid, char *pass) {
@@ -150,6 +151,7 @@ boolean InitWifiSSID(char *ssid, char *pass) {
 	WiFi.mode(WIFI_STA);
 	WiFi.begin(ssid, pass);
 
+	// wait for up to 10 seconds to get connected
 	while (WiFi.status() != WL_CONNECTED && attempts < 20) {
 		delay(500);
 		Serial.print(".");
@@ -175,6 +177,8 @@ boolean InitWifiSSID(char *ssid, char *pass) {
 
 bool MenuItemIsActive() {
 
+	// determines whether the newly selected menu item
+	// should be shown, based on other configured options
 	if (!cfg.useTwoDrops) {
 		if (menuItem == MENU_DROP_TWO_SIZE || 
 			menuItem == MENU_DELAY_BETWEEN_DROPS) {
@@ -198,11 +202,12 @@ bool MenuItemIsActive() {
 			return false;
 		}
 	}
-
 }
 
 void NextMenuItem(bool goingDown) {
 
+	// move to the next menu item either up or down. Skip any that should
+	// not be active, and loop round if it goes past the first or last
 	if (goingDown) {
 		menuItem++;
 	} else {
@@ -226,9 +231,9 @@ void InitServer() {
 	
 	Serial.println("Initialising server");
 	PrintToOLED(0, 5, F("	Init server	 "));
-	server.on("/set", HTTP_GET, [](AsyncWebServerRequest *request){
-		// get the params here
+	server.on("/set", HTTP_GET, [](AsyncWebServerRequest *request) {
 
+		// get the params here
 		String paramVal;
 		if (request->hasParam("drop1")) {
 			paramVal = request->getParam("drop1")->value();
@@ -322,8 +327,8 @@ unsigned long eeprom_crc() {
 	};
 
 	unsigned long crc = ~0L;
-
-	for (int index = 0; index < 17 ; ++index) {
+	int eepromSize = sizeof(cfg);
+	for (int index = 0; index < eepromSize ; ++index) {
 		byte epv = EEPROM.read(index);
 		crc = crc_table[(crc ^ epv) & 0x0f] ^ (crc >> 4);
 		crc = crc_table[(crc ^ (epv >> 4)) & 0x0f] ^ (crc >> 4);
@@ -596,6 +601,7 @@ void loop() {
 		delayVal = 0;
 	}
 
+	
 	int thisTouch = analogRead(TOUCH_FIRE);
 	int thisJoyUp = digitalRead(JOY_UP_PIN);
 	int thisJoyDown = digitalRead(JOY_DOWN_PIN);
@@ -708,11 +714,6 @@ void loop() {
 		Turn(solenoid,OFF);
 		Turn(laser,OFF);
 		Turn(flash,OFF);
-//		digitalWrite(CAMERA_PIN, LOW);
-//		digitalWrite(FOCUS_PIN, LOW);
-//		digitalWrite(SOLENOID_PIN, LOW);
-//		digitalWrite(LASER_PIN, LOW);
-//		digitalWrite(FLASH_PIN, LOW);
 
 	} else {
 
@@ -724,17 +725,12 @@ void loop() {
 		}
 		if (cameraTestIsRunning == false) {
 			Turn(camera,OFF);
-//			digitalWrite(CAMERA_PIN, LOW);
 		}
 		Turn(focus,OFF);
 		Turn(laser,OFF);
 		Turn(flash,OFF);
-//		digitalWrite(FOCUS_PIN, LOW);
-//		digitalWrite(FLASH_PIN, LOW);
-//		digitalWrite(LASER_PIN, LOW);
 		if (solenoidTestIsRunning == false) {
-		Turn(solenoid,OFF);
-//			digitalWrite(SOLENOID_PIN, LOW);
+			Turn(solenoid,OFF);
 		}
 	}
 }
@@ -757,47 +753,7 @@ void ClearScreen() {
 	u8x8.clearDisplay();
 }
 
-void RunSequence() {
-	if (cfg.laserMode == off) {
-		RunDropperSequence();
-	} else {
-		RunLaserSequence();
-	}
-}
-
-void RunDropperSequence() {
-
-	Serial.println("Running dropper sequence");
-	ClearScreen();													// want the screen off when shooting
-	delay(cfg.delayBeforeShooting);
-
-	Turn(camera,ON);
-	delay(cfg.delayBeforeDrops);
-
-	Turn(solenoid,ON);
-	delay(cfg.dropOneSize);												// hold the value open for the specified time (milliseconds) 
-	Turn(solenoid,OFF);
-
-	if (cfg.useTwoDrops) {
-		delay(cfg.delayBetweenDrops);									// keeps valve closed for the time between drips
-		Turn(solenoid,ON);
-		delay(cfg.dropTwoSize);											// keeps valve open for ValveOpen time (milliseconds)
-		Turn(solenoid,OFF);
-	}
-
-	delay(cfg.delayBeforeFlash);										// wait the flash delay time to trigger flash
-	Turn(flash,ON);
-	delay(cfg.flashDuration);											// keep flash trigger pin high long enough to trigger flash
-	Turn(flash,OFF);
-
-	delay(cfg.delayAfterShooting);										// wait the flash delay time to trigger flash
-	Turn(camera,OFF);
-
-	delay(100);														// keeps the system in a pause mode to avoid false triggers
-	Serial.println("Done sequence");
-	updateScreen = true;
-}
-
+// this is just here to make the rest of the sequence code look more readable
 void Turn(Device device, int onOff) {
 	switch (device) {
 		case camera:
@@ -813,12 +769,56 @@ void Turn(Device device, int onOff) {
 	}
 }
 
+void RunSequence() {
+	if (cfg.laserMode == off) {
+		RunDropperSequence();
+	} else {
+		RunLaserSequence();
+	}
+}
+
+void RunDropperSequence() {
+
+	Serial.println("Running dropper sequence");
+
+	ClearScreen();						// turn the screen off when shooting
+
+	delay(cfg.delayBeforeShooting);		// wait then turn on the camera
+	Turn(camera,ON);
+
+	delay(cfg.delayBeforeDrops);		// wait before doing the first drop
+
+	Turn(solenoid,ON);
+	delay(cfg.dropOneSize);				// open the solenoid for the configured amount of time for the first drop
+	Turn(solenoid,OFF);
+
+	if (cfg.useTwoDrops) {
+		delay(cfg.delayBetweenDrops);	// wait for the next drop
+		
+		Turn(solenoid,ON);				// open the solenoid for the configured amount of time for the second drop
+		delay(cfg.dropTwoSize);			
+		Turn(solenoid,OFF);
+	}
+
+	delay(cfg.delayBeforeFlash);		// wait before firing the flash
+	
+	Turn(flash,ON);						// turn on the flash for the configured amount of time
+	delay(cfg.flashDuration);
+	Turn(flash,OFF);
+
+	delay(cfg.delayAfterShooting);		// wait before turning off the camera
+	Turn(camera,OFF);
+
+	delay(10);
+	Serial.println("Done sequence");
+	updateScreen = true;
+}
+
 void RunLaserSequence() {
 
 	Serial.println("Running laser sequence");
-	ClearScreen();													// want the screen off when shooting
 	
-	delay(cfg.delayBeforeShooting);
+	delay(cfg.delayBeforeShooting);		// wait before startig
 
 	bool isArmed = false;
 	bool isTriggered = false;
@@ -827,6 +827,7 @@ void RunLaserSequence() {
 	PrintToOLED(0, 6, F("  Align laser   "));
 	Turn(laser,ON);
 
+	// wait for laser to be aligned or user to cancel
 	while (isArmed == false && isCancelled == false) {
 
 		int midState = digitalRead(JOY_MID_PIN);
@@ -852,7 +853,7 @@ void RunLaserSequence() {
 	PrintToOLED(0, 6, F(" Laser aligned  "));
 	delay(1000);
 
-	ClearScreen();													// want the screen off when shooting
+	ClearScreen();					// turn the screen off when shooting
 
 	if (cfg.laserMode == fireflash) {
 		Turn(camera,ON);
@@ -946,28 +947,17 @@ void RunLaserAlignment() {
 
 void TestCamera() {
 	Serial.println("Testing camera");
-
-	if (cameraTestIsRunning) {
-		Turn(camera,OFF);
-	} else {
-		Turn(camera,ON);
-	}
+	Turn(camera,(cameraTestIsRunning ? OFF: ON));
 	cameraTestIsRunning = !cameraTestIsRunning;
 }
 
 void TestSolenoid() {
 	Serial.println("Testing solenoid");
-
-	if (solenoidTestIsRunning) {
-		Turn(solenoid,OFF);
-	} else {
-		Turn(solenoid,ON);
-	}
+	Turn(solenoid,(solenoidTestIsRunning ? OFF: ON));
 	solenoidTestIsRunning = !solenoidTestIsRunning;
 }
 
 void TestFlash() {
-
 	Turn(flash,ON);
 	delay(cfg.flashDuration);	// keep flash trigger pin high long enough to trigger flash
 	Turn(flash,OFF);
