@@ -128,6 +128,8 @@ MPU6050 mpu;
 #define INTERRUPT_PIN 2	// use pin 2 on Arduino Uno & most boards
 #define LED_PIN 13 // (Arduino is 13, Teensy is 11, Teensy++ is 6)
 bool blinkState = false;
+#define SDSS_PIN					10		
+
 
 // MPU control/status vars
 bool dmpReady = false;	// set true if DMP init was successful
@@ -158,7 +160,7 @@ void dmpDataReady() {
 	mpuInterrupt = true;
 }
 
-bool logToFile = false;
+bool logToFile = true;
 
 // ================================================================
 // ===											INITIAL SETUP											 ===
@@ -179,13 +181,26 @@ void setup() {
 	Serial.begin(115200);
 	while (!Serial); // wait for Leonardo enumeration, others continue immediately
 
-	if (SD.begin()) {
-		Serial.println("SD card is ready to use.");
-	} else {
-		Serial.println("SD card initialization failed");
+	pinMode(SDSS_PIN, OUTPUT);
+	bool sdWorking = false;
+	int numTries = 0;
+	
+	while (sdWorking == false && numTries < 10 && logToFile == true) {
+	
+		sdWorking = SD.begin(SDSS_PIN);
+	
+		if (sdWorking) {
+			Serial.println("SD card is ready to use.");
+		} else {
+			Serial.println("SD card initialization failed");
+			numTries++;
+			delay(1000);
+		}
+	}
+	if (sdWorking == false && logToFile == true) {
 		return;
 	}
-
+	
 	// NOTE: 8MHz or slower host processors, like the Teensy @ 3.3V or Arduino
 	// Pro Mini running at 3.3V, cannot handle this baud rate reliably due to
 	// the baud timing being too misaligned with processor ticks. You must use
@@ -301,6 +316,7 @@ void loop() {
 			fifoCount -= packetSize;
 		}
 
+		long milli = millis();
 		if (logToFile) {
 			logFile = SD.open("imu_data.csv", FILE_WRITE);
 		}
@@ -317,12 +333,14 @@ void loop() {
 		Serial.print("\t");
 		Serial.println(q.z);
 		if (logFile) {
+			logFile.print(milli);
+			logFile.print(",");
 			logFile.print(q.w);
-			logFile.print("\t");
+			logFile.print(",");
 			logFile.print(q.x);
-			logFile.print("\t");
+			logFile.print(",");
 			logFile.print(q.y);
-			logFile.print("\t");
+			logFile.print(",");
 			logFile.println(q.z);
 		}		
 #endif
@@ -339,10 +357,12 @@ void loop() {
 		Serial.println(euler[2] * 180/M_PI);
 
 		if (logFile) {
+			logFile.print(milli);
+			logFile.print(",");
 			logFile.print(euler[0] * 180/M_PI);
-			logFile.print("\t");
+			logFile.print(",");
 			logFile.print(euler[1] * 180/M_PI);
-			logFile.print("\t");
+			logFile.print(",");
 			logFile.println(euler[2] * 180/M_PI);
 		}		
 		
@@ -361,6 +381,8 @@ void loop() {
 		Serial.println(ypr[2] * 180/M_PI);
 
 		if (logFile) {
+			logFile.print(milli);
+			logFile.print(",");
 			logFile.print(ypr[0] * 180/M_PI);
 			logFile.print(",");
 			logFile.print(ypr[1] * 180/M_PI);
@@ -383,10 +405,12 @@ void loop() {
 		Serial.println(aaReal.z);
 
 		if (logFile) {
+			logFile.print(milli);
+			logFile.print(",");
 			logFile.print(aaReal.x);
-			logFile.print("\t");
+			logFile.print(",");
 			logFile.print(aaReal.y);
-			logFile.print("\t");
+			logFile.print(",");
 			logFile.println(aaReal.z);
 		}		
 
@@ -409,12 +433,14 @@ void loop() {
 		Serial.println(aaWorld.z);
 
 		if (logFile) {
+			logFile.print(milli);
+			logFile.print(",");
 			logFile.print(aaWorld.x);
-			logFile.print("\t");
+			logFile.print(",");
 			logFile.print(aaWorld.y);
-			logFile.print("\t");
+			logFile.print(",");
 			logFile.println(aaWorld.z);
-		}		
+		}
 		
 #endif
 		
@@ -432,6 +458,7 @@ void loop() {
 		teapotPacket[11]++; // packetCount, loops at 0xFF on purpose
 #endif
 
+		logFile.close();		
 		// blink LED to indicate activity
 		blinkState = !blinkState;
 		digitalWrite(LED_PIN, blinkState);
@@ -739,4 +766,3 @@ void setParametersForMPU() { // No idea...
 }
 
 */
- */
