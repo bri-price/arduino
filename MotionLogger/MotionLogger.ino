@@ -68,6 +68,28 @@ File logFile;
 MPU6050 mpu;
 //MPU6050 mpu(0x69); // <-- use for AD0 high
 
+/*
+	Arduino Pins		Card Reader
+
+	GND					GND
+	5V					VCC
+	D12					MISO
+	D11					MOSI
+	D13					SCK
+	D10					CS
+
+						GY-512
+
+	VIN					VCC
+	GND					GND
+	SCL					A5
+	SDA					A4
+	INT					D2
+
+	
+
+*/
+
 /* =========================================================================
 	 NOTE: In addition to connection 3.3v, GND, SDA, and SCL, this sketch
 	 depends on the MPU-6050's INT pin being connected to the Arduino's
@@ -191,6 +213,13 @@ void setup() {
 	
 		if (sdWorking) {
 			Serial.println("SD card is ready to use.");
+
+			logFile = SD.open("imu_data.csv", FILE_WRITE);
+			if (logFile) {
+				logFile.println("Time(ms),W,X,Y,Z");
+				logFile.close();
+			}		
+
 		} else {
 			Serial.println("SD card initialization failed");
 			numTries++;
