@@ -1,5 +1,4 @@
 /*
-
 	Use board: "ESP 32 Wrover Module"
 
 	0,2,4,15,32,33 are touch pins
@@ -25,10 +24,8 @@
 
 #include "Secrets.h"
 
-char ssid1[] = SECRET_SSID1;
-char pass1[] = SECRET_PASS1;
-char ssid2[] = SECRET_SSID2;
-char pass2[] = SECRET_PASS2;
+char ssid[3][11] = { SECRET_SSID1, SECRET_SSID2, SECRET_SSID3 };
+char password[3][64] = { SECRET_PASS1, SECRET_PASS2, SECRET_PASS3 };
 
 #define	ON				HIGH
 #define OFF				LOW
@@ -86,9 +83,10 @@ enum LaserMode {
 #define MENU_TEST_FLASH					14
 #define MENU_TEST_SOLENOID				15
 #define MENU_ALIGN_LASER				16
+#define MENU_SHOW_IP					17
 
 // always update this if you add an item to the list above
-#define NUM_MENU_ITEMS					16
+#define NUM_MENU_ITEMS					17
 
 // configurable values - saved in eeprom
 typedef struct {
@@ -106,6 +104,7 @@ typedef struct {
 	int screenTimeout = 5;
 	bool useTwoDrops = false;
 	LaserMode laserMode = off;
+	int lastWifiNum = 0;
 	
 } CONFIGURATION;
 
@@ -116,8 +115,8 @@ CONFIGURATION cfg;
 
 // run time values
 bool joystickRight = true;
-int lastJoyLeft = HIGH;
-int lastJoyRight = HIGH;
+bool lastJoyLeft = false;
+bool lastJoyRight = false;
 int screenTimer = 0;
 int menuItem = 1;
 
@@ -128,7 +127,13 @@ int	sidewaysDelay = 500;
 double accelerationFactor = 1.3;
 bool cameraTestIsRunning = false;
 bool solenoidTestIsRunning = false;
+bool waitingToShoot = false;
+bool connectedToWifi = false;
 
+#define DIGITAL_JOYSTICK	1
+#define ANALOG_JOYSTICK		2
+
+int joystickType = DIGITAL_JOYSTICK;
 
 // OLED uses standard pins for SCL and SDA
 U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(SCL, SDA, U8X8_PIN_NONE);	 // OLEDs without Reset of the Display
@@ -152,7 +157,7 @@ boolean InitWifiSSID(char *ssid, char *pass) {
 	WiFi.begin(ssid, pass);
 
 	// wait for up to 10 seconds to get connected
-	while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+	while (WiFi.status() != WL_CONNECTED && attempts < 15) {
 		delay(500);
 		Serial.print(".");
 		attempts = attempts + 1;
@@ -172,6 +177,7 @@ boolean InitWifiSSID(char *ssid, char *pass) {
 	Serial.print(" on IP address: ");
 	Serial.println(WiFi.localIP());
 	delay(100);
+	connectedToWifi = true;
 	return true;
 }
 
@@ -227,93 +233,119 @@ void NextMenuItem(bool goingDown) {
 	}
 }
 
+void handleCors(AsyncWebServerResponse *response)
+{
+	response->addHeader("Access-Control-Allow-Origin", "*");
+}
+
 void InitServer() {
 	
 	Serial.println("Initialising server");
 	PrintToOLED(0, 5, F("	Init server	 "));
-	server.on("/set", HTTP_GET, [](AsyncWebServerRequest *request) {
 
-		// get the params here
-		String paramVal;
-		if (request->hasParam("drop1")) {
-			paramVal = request->getParam("drop1")->value();
-			cfg.dropOneSize = paramVal.toInt();
-		}
-		
-		if (request->hasParam("drop2")) {
-			paramVal = request->getParam("drop2")->value();
-			cfg.dropTwoSize = paramVal.toInt();
-		}
-		
-		if (request->hasParam("predelay")) {
-			paramVal = request->getParam("predelay")->value();
-			cfg.delayBeforeShooting = paramVal.toInt();
-		}
-		
-		if (request->hasParam("postdelay")) {
-			paramVal = request->getParam("postdelay")->value();
-			cfg.delayAfterShooting = paramVal.toInt();
-		}
-		
-		if (request->hasParam("laserdelay")) {
-			paramVal = request->getParam("laserdelay")->value();
-			cfg.delayAfterLaser = paramVal.toInt();
-		}
-		
-		if (request->hasParam("dropdelay")) {
-			paramVal = request->getParam("dropdelay")->value();
-			cfg.delayBeforeDrops = paramVal.toInt();
-		}
-		if (request->hasParam("betweendelay")) {
-			paramVal = request->getParam("betweendelay")->value();
-			cfg.delayBetweenDrops = paramVal.toInt();
-		}
-		
-		if (request->hasParam("flashdelay")) {
-			paramVal = request->getParam("flashdelay")->value();
-			cfg.delayBeforeFlash = paramVal.toInt();
-		}
+    server.on("/shoot", HTTP_POST, [] (AsyncWebServerRequest *request) {
+		AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "OK");
+		response->addHeader("Access-Control-Allow-Origin", "*");
+		request->send(response);
+		waitingToShoot = true;
+	});
 
-		if (request->hasParam("flashduration")) {
-			paramVal = request->getParam("flashduration")->value();
-			cfg.flashDuration = paramVal.toInt();
-		}
+    server.on("/shoot", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "OK");
+		response->addHeader("Access-Control-Allow-Origin", "*");
+		request->send(response);
+		waitingToShoot = true;
+	});
+
+	server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+		DynamicJsonDocument data(1024);
+      	AsyncResponseStream *response = request->beginResponseStream("application/json");
+		response->addHeader("Access-Control-Allow-Origin", "*");
+      	
+		data["dropOneSize"] = cfg.dropOneSize;
+		data["dropTwoSize"] = cfg.dropTwoSize;
+		data["delayBeforeShooting"] = cfg.delayBeforeShooting;
+		data["delayBeforeDrops"] = cfg.delayBeforeDrops;
+		data["delayBetweenDrops"] = cfg.delayBetweenDrops;
+		data["delayBeforeFlash"] = cfg.delayBeforeFlash;
+		data["delayAfterShooting"] = cfg.delayAfterShooting;
+		data["delayAfterLaser"] = cfg.delayAfterLaser;
+		data["cameraDuration"] = cfg.flashDuration;
+		data["screenTimeout"] = cfg.screenTimeout;
+		data["useTwoDrops"] = cfg.useTwoDrops;
+		data["laserMode"] = (int)cfg.laserMode;
+
+		serializeJson(data, *response);
+		request->send(response);
+		Serial.println("API call GET /settings");
+	});
+
+	server.on("/settings", HTTP_POST, [] (AsyncWebServerRequest *request) {
+
+		int params = request->params();
+		Serial.printf("%d params sent in\n", params);
+		for (int i = 0; i < params; i++) {
+			AsyncWebParameter *p = request->getParam(i);
+			if (p->isPost()) {
+				if (p->name() == "body") {
+
+					StaticJsonDocument<1024> doc;
+					deserializeJson(doc, (char *)p->value().c_str());
 		
-		if (request->hasParam("screentimeout")) {
-			paramVal = request->getParam("screentimeout")->value();
-			cfg.screenTimeout = paramVal.toInt();
-		}
+					if (doc.containsKey("dropOneSize") ) {
+						cfg.dropOneSize = doc["dropOneSize"];
+					}
+					if (doc.containsKey("dropTwoSize") ) {
+						cfg.dropTwoSize = doc["dropTwoSize"];
+					}
+					if (doc.containsKey("delayBeforeShooting") ) {
+						cfg.delayBeforeShooting = doc["delayBeforeShooting"];
+					}
+					if (doc.containsKey("delayBeforeDrops") ) {
+						cfg.delayBeforeDrops = doc["delayBeforeDrops"];
+					}
+					if (doc.containsKey("delayBetweenDrops") ) {
+						cfg.delayBetweenDrops = doc["delayBetweenDrops"];
+					}
+					if (doc.containsKey("delayBeforeFlash") ) {
+						cfg.delayBeforeFlash = doc["delayBeforeFlash"];
+					}
+					if (doc.containsKey("delayAfterShooting") ) {
+						cfg.delayAfterShooting = doc["delayAfterShooting"];
+					}
+					if (doc.containsKey("delayAfterLaser") ) {
+						cfg.delayAfterLaser = doc["delayAfterLaser"];
+					}
+					if (doc.containsKey("cameraDuration") ) {
+						cfg.cameraDuration = doc["cameraDuration"];
+					}
+					if (doc.containsKey("screenTimeout") ) {
+						cfg.screenTimeout = doc["screenTimeout"];
+					}
+					if (doc.containsKey("useTwoDrops") ) {
+						cfg.useTwoDrops = doc["useTwoDrops"];
+						Serial.print("useTwoDrops set to ");
+						Serial.println(cfg.useTwoDrops);
+					}
+					if (doc.containsKey("laserMode") ) {
+						cfg.laserMode = doc["laserMode"];
+					}
 		
-		if (request->hasParam("twodrops")) {
-			paramVal = request->getParam("twodrops")->value();
-			paramVal.toLowerCase();
-			if (paramVal == "true" || paramVal == "yes" || paramVal == "1") {
-				cfg.useTwoDrops = true;
-			} else {
-				cfg.useTwoDrops = false;
+					SaveSettings();
+					updateScreen = true;
+					AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "Done");
+					response->addHeader("Access-Control-Allow-Origin", "*");
+					request->send(response);
+					return;
+				}
 			}
 		}
-		
-		if (request->hasParam("laser")) {
-			paramVal = request->getParam("laser")->value();
-			paramVal.toLowerCase();
-			if (paramVal == "flash") {
-				cfg.laserMode = fireflash;
-			} else if (paramVal == "camera") {
-				cfg.laserMode = firecamera;
-			} else {
-				cfg.laserMode = off;
-			}
-		}
 
-		request->send(200, "text/plain", "OK");
+		AsyncWebServerResponse *response = request->beginResponse(400, "text/plain", "No body");
+		response->addHeader("Access-Control-Allow-Origin", "*");
+		request->send(response);
 	});
-	
-	server.on("/shoot", HTTP_GET, [](AsyncWebServerRequest *request){
-		RunSequence();
-		request->send(200, "text/plain", "OK");
-	});
-	
+
 	PrintToOLED(0, 6, F("  Start server  "));
 	server.begin();
 }
@@ -386,6 +418,10 @@ void InitConfig() {
 	EEPROM.get(eepromPtr, cfg.laserMode);
 	eepromPtr += sizeof(cfg.laserMode);
 
+	EEPROM.get(eepromPtr, cfg.lastWifiNum);
+	eepromPtr += sizeof(cfg.lastWifiNum);
+
+
 	Serial.print("cameraDuration read as ");
 	Serial.println(cfg.cameraDuration);
 
@@ -422,6 +458,8 @@ void SaveSettings() {
 	eepromPtr += sizeof(cfg.useTwoDrops);
 	EEPROM.put(eepromPtr, cfg.laserMode);
 	eepromPtr += sizeof(cfg.laserMode);
+	EEPROM.put(eepromPtr, cfg.lastWifiNum);
+	eepromPtr += sizeof(cfg.lastWifiNum);
 
 	EEPROM.commit();
 	
@@ -446,21 +484,30 @@ void InitGPIO() {
 	pinMode(FLASH_PIN, OUTPUT);
 	Turn(flash,OFF);
 
-	pinMode(JOY_UP_PIN, INPUT_PULLUP);
-	digitalWrite(JOY_UP_PIN, HIGH);
+	if (joystickType == DIGITAL_JOYSTICK) {
 
-	pinMode(JOY_DOWN_PIN, INPUT_PULLUP);
-	digitalWrite(JOY_DOWN_PIN, HIGH);
+		pinMode(JOY_UP_PIN, INPUT_PULLUP);
+		digitalWrite(JOY_UP_PIN, HIGH);
 	
-	pinMode(JOY_LEFT_PIN, INPUT_PULLUP);
-	digitalWrite(JOY_LEFT_PIN, HIGH);
-	
-	pinMode(JOY_RIGHT_PIN, INPUT_PULLUP);
-	digitalWrite(JOY_RIGHT_PIN, HIGH);
-	
-	pinMode(JOY_MID_PIN, INPUT_PULLUP);
-	digitalWrite(JOY_MID_PIN, HIGH);
+		pinMode(JOY_DOWN_PIN, INPUT_PULLUP);
+		digitalWrite(JOY_DOWN_PIN, HIGH);
+		
+		pinMode(JOY_LEFT_PIN, INPUT_PULLUP);
+		digitalWrite(JOY_LEFT_PIN, HIGH);
+		
+		pinMode(JOY_RIGHT_PIN, INPUT_PULLUP);
+		digitalWrite(JOY_RIGHT_PIN, HIGH);
+		
+		pinMode(JOY_MID_PIN, INPUT_PULLUP);
+		digitalWrite(JOY_MID_PIN, HIGH);
+	} else {
 
+		pinMode(JOY_RIGHT_PIN, INPUT_PULLUP);
+		digitalWrite(JOY_RIGHT_PIN, HIGH);
+		pinMode(JOY_UP_PIN, OUTPUT);
+		digitalWrite(JOY_UP_PIN, HIGH);
+	}
+	
 	pinMode(LASER_DETECT, INPUT);
 
 	pinMode(LASER_PIN, OUTPUT);
@@ -472,29 +519,50 @@ void InitSerial() {
 	delay(1000);
 	Serial.println("");
 	Serial.println("Initialised serial");
+	delay(1000);
 }
 
 void InitWifi() {
 	
-	bool wifiOne = true;
+	int wifiNum = cfg.lastWifiNum;
 	bool wifiConnected = false;
+	int attempts = 0;
 
 	while (!wifiConnected) {
-		wifiConnected = wifiOne ? InitWifiSSID(ssid1,pass1) : InitWifiSSID(ssid2,pass2);
-		wifiOne = !wifiOne;
+		wifiConnected = InitWifiSSID(ssid[wifiNum],password[wifiNum]);
+
+		if (wifiConnected == false) {
+			attempts++;
+			wifiNum = wifiNum + 1;
+			if (wifiNum == 3) {
+				wifiNum = 0;
+			}
+		}
+		if (attempts > 5) {
+			Serial.println("WiFi failed after 6 attempts");
+			break;
+		}
 	}
 }
 
 void setup() {
 
 	InitSerial();
+	Serial.println("InitConfig");
 	InitConfig();
+	Serial.println("InitGPIO");
 	InitGPIO();
+	Serial.println("InitOLED");
 	InitOLED();
-	InitWifi();
-	InitServer();
 
+	if (joystickType == DIGITAL_JOYSTICK) {
+		Serial.println("InitWifi");
+		InitWifi();
+		Serial.println("InitServer");
+		InitServer();
+	}
 	delay(400);
+	Serial.println("ResetOLED");
 	ResetOLED();
 	Serial.println("Setup complete");
 }
@@ -505,6 +573,11 @@ void loop() {
 	if (updateScreen) {
 		updateScreen = false;
 		PrintToOLED(0, 0, F("DSLR AUTOTRIGGER"));
+		if (connectedToWifi) {
+			PrintToOLEDFullLine(0, 1, WiFi.localIP().toString());
+		} else {
+			PrintToOLEDFullLine(0, 1, "disconnected");
+		}
 		String m = String("Option " + String(menuItem) + " ");
 		PrintToOLEDFullLine(3, 2, m);
 		switch (menuItem) {
@@ -590,6 +663,10 @@ void loop() {
 				PrintToOLED(0, 4, F("Align Laser     "));
 				PrintToOLEDFullLine(4, 6, " ");
 				break;
+			case MENU_SHOW_IP:
+				PrintToOLED(0, 4, F("IP Address     "));
+				PrintToOLEDFullLine(0, 6, WiFi.localIP().toString());
+				break;
 		}
 	}
 
@@ -601,19 +678,44 @@ void loop() {
 		delayVal = 0;
 	}
 
-	
-	int thisTouch = analogRead(TOUCH_FIRE);
-	int thisJoyUp = digitalRead(JOY_UP_PIN);
-	int thisJoyDown = digitalRead(JOY_DOWN_PIN);
-	int thisJoyLeft = digitalRead(JOY_LEFT_PIN);
-	int thisJoyRight = digitalRead(JOY_RIGHT_PIN);
+//	bool thisTouch = false;
+	bool thisJoyUp = false;
+	bool thisJoyDown = false;
+	bool thisJoyLeft = false;
+	bool thisJoyRight = false;
+	bool thisMidState = false;
 
-	if (thisJoyLeft == LOW || thisJoyRight == LOW) {
-		if (thisJoyLeft == LOW) {
-			Serial.println("joy left");
-		} else {
-			Serial.println("joy right");
-		}
+	if (joystickType == DIGITAL_JOYSTICK) {
+//		int iTouch = digitalRead(TOUCH_FIRE);
+		int iJoyUp = digitalRead(JOY_UP_PIN);
+		int iJoyDown = digitalRead(JOY_DOWN_PIN);
+		int iJoyLeft = digitalRead(JOY_LEFT_PIN);
+		int iJoyRight = digitalRead(JOY_RIGHT_PIN);
+		int imidState = digitalRead(JOY_MID_PIN);
+
+//		thisTouch = (iTouch == LOW);
+		thisJoyUp = (iJoyUp == LOW);
+		thisJoyDown = (iJoyDown == LOW);
+		thisJoyLeft = (iJoyLeft == LOW);
+		thisJoyRight = (iJoyRight == LOW);
+		thisMidState = (imidState == LOW);
+	} else {
+
+		int iJoyLeftRight = analogRead(JOY_LEFT_PIN);
+		int iJoyUpDown = analogRead(JOY_DOWN_PIN);
+		int imidState = digitalRead(JOY_RIGHT_PIN);
+
+//		thisTouch = (iTouch == LOW);
+		thisJoyUp = (iJoyUpDown < 10);
+		thisJoyDown = (iJoyUpDown > 4080);
+		thisJoyLeft = (iJoyLeftRight > 4080);
+		thisJoyRight = (iJoyLeftRight < 10);
+		thisMidState = (imidState == LOW);
+		delay(100);
+	}
+
+	if (thisJoyLeft || thisJoyRight) {
+
 		// if the joystick has moved sideways, we change the setting value
 
 		// joystick has been used, so keep the screen on
@@ -622,7 +724,7 @@ void loop() {
 		// also, the screen will need to be updated
 		updateScreen = true;					
 
-		joystickRight = (thisJoyRight == LOW);
+		joystickRight = thisJoyRight;
 		if (thisJoyLeft == lastJoyLeft && thisJoyRight == lastJoyRight) {
 			// the joystick is the same position as last time, so speed up
 			if (sidewaysDelay > 10) {
@@ -696,14 +798,14 @@ void loop() {
 		lastJoyRight = thisJoyRight;
 		delayVal = sidewaysDelay;
 
-	} else if (thisJoyUp == LOW || thisJoyDown == LOW) {
+	} else if (thisJoyUp || thisJoyDown) {
 
 		// joystick has been used, so keep the screen on
 		screenTimer = cfg.screenTimeout * 1000;
 		// also, the screen will need to be updated
 		updateScreen = true;
 
-		NextMenuItem(thisJoyDown == LOW);
+		NextMenuItem(thisJoyDown);
 		delayVal = downwardsDelay;
 
 		cameraTestIsRunning = false;
@@ -718,9 +820,8 @@ void loop() {
 	} else {
 
 		// check if the joystick button has been pressed, to initiate the process
-
-		int midState = digitalRead(JOY_MID_PIN);
-		if (midState == LOW) {
+		if (thisMidState || waitingToShoot) {
+			waitingToShoot = false;
 			RunSequence();
 		}
 		if (cameraTestIsRunning == false) {
@@ -784,29 +885,36 @@ void RunDropperSequence() {
 	ClearScreen();						// turn the screen off when shooting
 
 	delay(cfg.delayBeforeShooting);		// wait then turn on the camera
+	Serial.println("Turn camera on");
 	Turn(camera,ON);
 
 	delay(cfg.delayBeforeDrops);		// wait before doing the first drop
 
+	Serial.println("Turn solenoid on");
 	Turn(solenoid,ON);
 	delay(cfg.dropOneSize);				// open the solenoid for the configured amount of time for the first drop
+	Serial.println("Turn solenoid off");
 	Turn(solenoid,OFF);
 
 	if (cfg.useTwoDrops) {
 		delay(cfg.delayBetweenDrops);	// wait for the next drop
 		
+		Serial.println("Turn solenoid on");
 		Turn(solenoid,ON);				// open the solenoid for the configured amount of time for the second drop
 		delay(cfg.dropTwoSize);			
+		Serial.println("Turn solenoid off");
 		Turn(solenoid,OFF);
 	}
 
 	delay(cfg.delayBeforeFlash);		// wait before firing the flash
 	
+	Serial.println("Fire flash");
 	Turn(flash,ON);						// turn on the flash for the configured amount of time
 	delay(cfg.flashDuration);
 	Turn(flash,OFF);
 
 	delay(cfg.delayAfterShooting);		// wait before turning off the camera
+	Serial.println("Turn camera off");
 	Turn(camera,OFF);
 
 	delay(10);
