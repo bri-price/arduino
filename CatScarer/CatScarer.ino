@@ -3,7 +3,7 @@
 #include "SR04.h"
 
 #define SOLENOID_PIN			13
-#define PIR_PIN						12
+#define PIR_PIN					12
 
 
 #define FAKE_VCC_PIN			14
