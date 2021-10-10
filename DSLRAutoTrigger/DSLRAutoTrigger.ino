@@ -35,76 +35,99 @@ enum Device {
 	focus,
 	flash,
 	laser,
-	solenoid
+	solenoid,
+	microphone
 };
 
-enum LaserMode {
-	off,
-	fireflash,
-	firecamera
+enum TriggerMode {
+	buttonTrigger,
+	laserTriggerFlash,
+	laserShootCamera,
+	soundTriggerFlash,
+	soundShootCamera
 };
+
+//	0,2,4,15,32,33 are touch pins
+//	34,35,36,39 are input only
+
 
 // optocouplers
-#define CAMERA_PIN		18
-#define FOCUS_PIN		5
-#define FLASH_PIN		19
+#define CAMERA_PIN			18
+#define FOCUS_PIN			5
+#define FLASH_PIN			19
 
 // laser detector
-#define LASER_PIN		32
-#define LASER_DETECT	35
+#define LASER_EMIT_PIN		32
+#define LASER_DETECT_PIN	35
+
+// sound sensor
+#define SOUND_ANALOG_PIN	34
 
 // touch pad
-#define TOUCH_FIRE		33
+#define TOUCH_PIN			33
+
+// button
+#define BUTTON_PIN			36
 
 // solenoid
-#define SOLENOID_PIN	13
+#define SOLENOID_PIN		13
 
 // joystick
-#define JOY_UP_PIN		12
-#define JOY_DOWN_PIN	14
-#define JOY_LEFT_PIN	27
-#define JOY_RIGHT_PIN	26
-#define JOY_MID_PIN		25
+#define JOY_UP_PIN			12
+#define JOY_DOWN_PIN		14
+#define JOY_LEFT_PIN		27
+#define JOY_RIGHT_PIN		26
+#define JOY_MID_PIN			25
 
 // menu items
-#define MENU_DELAY_BEFORE_SHOOTING		1
-#define MENU_LASER_MODE					2
+#define MENU_TRIGGER_MODE				1
+// dropper values
+#define MENU_DELAY_BEFORE_SHOOTING		2
 #define MENU_DELAY_BEFORE_DROPS			3
 #define MENU_DROP_ONE_SIZE				4
 #define MENU_USE_TWO_DROPS				5
 #define MENU_DROP_TWO_SIZE				6
 #define MENU_DELAY_BETWEEN_DROPS		7
 #define MENU_DELAY_BEFORE_FLASH			8
+// laser trigger
 #define MENU_DELAY_AFTER_LASER			9
-#define MENU_DELAY_AFTER_SHOOTING		10
-#define MENU_SCREEN_TIMEOUT				11
-#define MENU_SAVE_SETTINGS				12
-#define MENU_TEST_CAMERA				13
-#define MENU_TEST_FLASH					14
-#define MENU_TEST_SOLENOID				15
-#define MENU_ALIGN_LASER				16
-#define MENU_SHOW_IP					17
+// mic trigger
+#define MENU_DELAY_AFTER_SOUND			10
+// common value
+#define MENU_DELAY_AFTER_SHOOTING		11
+#define MENU_ALIGN_LASER				12
+#define MENU_CALIBRATE_MIC				13
+#define MENU_SAVE_SETTINGS				14
+#define MENU_TEST_CAMERA				15
+#define MENU_TEST_FLASH					16
+#define MENU_TEST_SOLENOID				17
+
+#define MENU_ENABLE_TOUCH				18
+#define MENU_ENABLE_BUTTON				19
+#define MENU_ENABLE_JOYBUTTON			20
+
 
 // always update this if you add an item to the list above
-#define NUM_MENU_ITEMS					17
+#define NUM_MENU_ITEMS					20
 
 // configurable values - saved in eeprom
 typedef struct {
 
-	int dropOneSize = 95;
-	int dropTwoSize = 95;
+	TriggerMode triggerMode = buttonTrigger;
+	bool useTwoDrops = false;
 	int delayBeforeShooting = 1000;
 	int delayBeforeDrops = 100;
+	int dropOneSize = 95;
 	int delayBetweenDrops = 100;
+	int dropTwoSize = 95;
 	int delayBeforeFlash = 300;
-	int delayAfterShooting = 100;
 	int delayAfterLaser = 50;
-	int flashDuration = 5;
-	int cameraDuration = 350;
-	int screenTimeout = 5;
-	bool useTwoDrops = false;
-	LaserMode laserMode = off;
+	int delayAfterSound = 0;
+	int delayAfterShooting = 100;
 	int lastWifiNum = 0;
+	bool enableTouch = false;
+	bool enableButton = false;
+	bool enableJoyButton = true;
 	
 } CONFIGURATION;
 
@@ -112,12 +135,13 @@ CONFIGURATION cfg;
 
 // UI defines
 #define	MAXSIDEWAYSDELAY		500
+#define FLASH_DURATION			5
+#define CAMERA_DURATION			350
 
 // run time values
 bool joystickRight = true;
 bool lastJoyLeft = false;
 bool lastJoyRight = false;
-int screenTimer = 0;
 int menuItem = 1;
 
 bool updateScreen = true;
@@ -129,6 +153,7 @@ bool cameraTestIsRunning = false;
 bool solenoidTestIsRunning = false;
 bool waitingToShoot = false;
 bool connectedToWifi = false;
+int soundCalibrationLevel = 0;
 
 #define DIGITAL_JOYSTICK	1
 #define ANALOG_JOYSTICK		2
@@ -192,19 +217,35 @@ bool MenuItemIsActive() {
 		}
 	}
 
-	if (cfg.laserMode == off) {
-		if (menuItem == MENU_DELAY_AFTER_LASER || 
-			menuItem == MENU_ALIGN_LASER) {
-			return false;
-		}
-	} else {
+	if (cfg.triggerMode == laserTriggerFlash || cfg.triggerMode == laserShootCamera) {
 		if (menuItem == MENU_DELAY_BEFORE_DROPS || 
 			menuItem == MENU_DROP_ONE_SIZE ||
 			menuItem == MENU_USE_TWO_DROPS ||
 			menuItem == MENU_DROP_TWO_SIZE ||
+			menuItem == MENU_CALIBRATE_MIC ||
+			menuItem == MENU_DELAY_AFTER_SOUND ||
 			menuItem == MENU_TEST_SOLENOID ||
 			menuItem == MENU_DELAY_BETWEEN_DROPS ||
 			menuItem == MENU_DELAY_BEFORE_FLASH) {
+			return false;
+		}
+	} else if (cfg.triggerMode == soundTriggerFlash || cfg.triggerMode == soundShootCamera) {
+		if (menuItem == MENU_DELAY_BEFORE_DROPS || 
+			menuItem == MENU_DROP_ONE_SIZE ||
+			menuItem == MENU_USE_TWO_DROPS ||
+			menuItem == MENU_DROP_TWO_SIZE ||
+			menuItem == MENU_ALIGN_LASER ||
+			menuItem == MENU_DELAY_AFTER_LASER ||
+			menuItem == MENU_TEST_SOLENOID ||
+			menuItem == MENU_DELAY_BETWEEN_DROPS ||
+			menuItem == MENU_DELAY_BEFORE_FLASH) {
+			return false;
+		}
+	} else {
+		if (menuItem == MENU_DELAY_AFTER_LASER || 
+			menuItem == MENU_DELAY_AFTER_SOUND ||
+			menuItem == MENU_CALIBRATE_MIC ||
+			menuItem == MENU_ALIGN_LASER) {
 			return false;
 		}
 	}
@@ -262,18 +303,20 @@ void InitServer() {
       	AsyncResponseStream *response = request->beginResponseStream("application/json");
 		response->addHeader("Access-Control-Allow-Origin", "*");
       	
-		data["dropOneSize"] = cfg.dropOneSize;
-		data["dropTwoSize"] = cfg.dropTwoSize;
+		data["triggerMode"] = (int)cfg.triggerMode;
+		data["useTwoDrops"] = cfg.useTwoDrops;
 		data["delayBeforeShooting"] = cfg.delayBeforeShooting;
 		data["delayBeforeDrops"] = cfg.delayBeforeDrops;
+		data["dropOneSize"] = cfg.dropOneSize;
 		data["delayBetweenDrops"] = cfg.delayBetweenDrops;
+		data["dropTwoSize"] = cfg.dropTwoSize;
 		data["delayBeforeFlash"] = cfg.delayBeforeFlash;
-		data["delayAfterShooting"] = cfg.delayAfterShooting;
 		data["delayAfterLaser"] = cfg.delayAfterLaser;
-		data["cameraDuration"] = cfg.flashDuration;
-		data["screenTimeout"] = cfg.screenTimeout;
-		data["useTwoDrops"] = cfg.useTwoDrops;
-		data["laserMode"] = (int)cfg.laserMode;
+		data["delayAfterSound"] = cfg.delayAfterSound;
+		data["delayAfterShooting"] = cfg.delayAfterShooting;
+		data["enableTouch"] = cfg.enableTouch;
+		data["enableButton"] = cfg.enableButton;
+		data["enableJoyButton"] = cfg.enableJoyButton;
 
 		serializeJson(data, *response);
 		request->send(response);
@@ -292,11 +335,11 @@ void InitServer() {
 					StaticJsonDocument<1024> doc;
 					deserializeJson(doc, (char *)p->value().c_str());
 		
-					if (doc.containsKey("dropOneSize") ) {
-						cfg.dropOneSize = doc["dropOneSize"];
+					if (doc.containsKey("triggerMode") ) {
+						cfg.triggerMode = doc["triggerMode"];
 					}
-					if (doc.containsKey("dropTwoSize") ) {
-						cfg.dropTwoSize = doc["dropTwoSize"];
+					if (doc.containsKey("useTwoDrops") ) {
+						cfg.useTwoDrops = doc["useTwoDrops"];
 					}
 					if (doc.containsKey("delayBeforeShooting") ) {
 						cfg.delayBeforeShooting = doc["delayBeforeShooting"];
@@ -304,31 +347,35 @@ void InitServer() {
 					if (doc.containsKey("delayBeforeDrops") ) {
 						cfg.delayBeforeDrops = doc["delayBeforeDrops"];
 					}
+					if (doc.containsKey("dropOneSize") ) {
+						cfg.dropOneSize = doc["dropOneSize"];
+					}
 					if (doc.containsKey("delayBetweenDrops") ) {
 						cfg.delayBetweenDrops = doc["delayBetweenDrops"];
+					}
+					if (doc.containsKey("dropTwoSize") ) {
+						cfg.dropTwoSize = doc["dropTwoSize"];
 					}
 					if (doc.containsKey("delayBeforeFlash") ) {
 						cfg.delayBeforeFlash = doc["delayBeforeFlash"];
 					}
-					if (doc.containsKey("delayAfterShooting") ) {
-						cfg.delayAfterShooting = doc["delayAfterShooting"];
-					}
 					if (doc.containsKey("delayAfterLaser") ) {
 						cfg.delayAfterLaser = doc["delayAfterLaser"];
 					}
-					if (doc.containsKey("cameraDuration") ) {
-						cfg.cameraDuration = doc["cameraDuration"];
+					if (doc.containsKey("delayAfterSound") ) {
+						cfg.delayAfterLaser = doc["delayAfterSound"];
 					}
-					if (doc.containsKey("screenTimeout") ) {
-						cfg.screenTimeout = doc["screenTimeout"];
+					if (doc.containsKey("delayAfterShooting") ) {
+						cfg.delayAfterShooting = doc["delayAfterShooting"];
 					}
-					if (doc.containsKey("useTwoDrops") ) {
-						cfg.useTwoDrops = doc["useTwoDrops"];
-						Serial.print("useTwoDrops set to ");
-						Serial.println(cfg.useTwoDrops);
+					if (doc.containsKey("enableTouch") ) {
+						cfg.enableTouch = doc["enableTouch"];
 					}
-					if (doc.containsKey("laserMode") ) {
-						cfg.laserMode = doc["laserMode"];
+					if (doc.containsKey("enableButton") ) {
+						cfg.enableButton = doc["enableButton"];
+					}
+					if (doc.containsKey("enableJoyButton") ) {
+						cfg.enableJoyButton = doc["enableJoyButton"];
 					}
 		
 					SaveSettings();
@@ -390,41 +437,36 @@ void InitConfig() {
 	Serial.println("  - CRC OK getting saved values");
 
 	int eepromPtr = 0;
-	EEPROM.get(eepromPtr, cfg.dropOneSize);
-	eepromPtr += sizeof(cfg.dropOneSize);
-	EEPROM.get(eepromPtr, cfg.dropTwoSize);
-	eepromPtr += sizeof(cfg.dropTwoSize);
+	EEPROM.get(eepromPtr, cfg.triggerMode);
+	eepromPtr += sizeof(cfg.triggerMode);
+	EEPROM.get(eepromPtr, cfg.useTwoDrops);
+	eepromPtr += sizeof(cfg.useTwoDrops);
 	EEPROM.get(eepromPtr, cfg.delayBeforeShooting);
 	eepromPtr += sizeof(cfg.delayBeforeShooting);
 	EEPROM.get(eepromPtr, cfg.delayBeforeDrops);
 	eepromPtr += sizeof(cfg.delayBeforeDrops);
+	EEPROM.get(eepromPtr, cfg.dropOneSize);
+	eepromPtr += sizeof(cfg.dropOneSize);
 	EEPROM.get(eepromPtr, cfg.delayBetweenDrops);
 	eepromPtr += sizeof(cfg.delayBetweenDrops);
+	EEPROM.get(eepromPtr, cfg.dropTwoSize);
+	eepromPtr += sizeof(cfg.dropTwoSize);
 	EEPROM.get(eepromPtr, cfg.delayBeforeFlash);
 	eepromPtr += sizeof(cfg.delayBeforeFlash);
-	EEPROM.get(eepromPtr, cfg.delayAfterShooting);
-	eepromPtr += sizeof(cfg.delayAfterShooting);
 	EEPROM.get(eepromPtr, cfg.delayAfterLaser);
 	eepromPtr += sizeof(cfg.delayAfterLaser);
-	EEPROM.get(eepromPtr, cfg.flashDuration);
-	eepromPtr += sizeof(cfg.flashDuration);
-	EEPROM.get(eepromPtr, cfg.cameraDuration);
-	eepromPtr += sizeof(cfg.cameraDuration);
-	EEPROM.get(eepromPtr, cfg.screenTimeout);
-	eepromPtr += sizeof(cfg.screenTimeout);
-	EEPROM.get(eepromPtr, cfg.useTwoDrops);
-	eepromPtr += sizeof(cfg.useTwoDrops);
-	
-	EEPROM.get(eepromPtr, cfg.laserMode);
-	eepromPtr += sizeof(cfg.laserMode);
-
+	EEPROM.get(eepromPtr, cfg.delayAfterSound);
+	eepromPtr += sizeof(cfg.delayAfterSound);
+	EEPROM.get(eepromPtr, cfg.delayAfterShooting);
+	eepromPtr += sizeof(cfg.delayAfterShooting);
 	EEPROM.get(eepromPtr, cfg.lastWifiNum);
 	eepromPtr += sizeof(cfg.lastWifiNum);
-
-
-	Serial.print("cameraDuration read as ");
-	Serial.println(cfg.cameraDuration);
-
+	EEPROM.get(eepromPtr, cfg.enableTouch);
+	eepromPtr += sizeof(cfg.enableTouch);
+	EEPROM.get(eepromPtr, cfg.enableButton);
+	eepromPtr += sizeof(cfg.enableButton);
+	EEPROM.get(eepromPtr, cfg.enableJoyButton);
+	eepromPtr += sizeof(cfg.enableJoyButton);
 }
 
 void SaveSettings() {
@@ -432,35 +474,36 @@ void SaveSettings() {
 	Serial.println("Saving settings");
 
 	int eepromPtr = 0;
-	EEPROM.put(eepromPtr, cfg.dropOneSize);
-	eepromPtr += sizeof(cfg.dropOneSize);
-	EEPROM.put(eepromPtr, cfg.dropTwoSize);
-	eepromPtr += sizeof(cfg.dropTwoSize);
+	EEPROM.put(eepromPtr, cfg.triggerMode);
+	eepromPtr += sizeof(cfg.triggerMode);
+	EEPROM.put(eepromPtr, cfg.useTwoDrops);
+	eepromPtr += sizeof(cfg.useTwoDrops);
 	EEPROM.put(eepromPtr, cfg.delayBeforeShooting);
 	eepromPtr += sizeof(cfg.delayBeforeShooting);
 	EEPROM.put(eepromPtr, cfg.delayBeforeDrops);
 	eepromPtr += sizeof(cfg.delayBeforeDrops);
+	EEPROM.put(eepromPtr, cfg.dropOneSize);
+	eepromPtr += sizeof(cfg.dropOneSize);
 	EEPROM.put(eepromPtr, cfg.delayBetweenDrops);
 	eepromPtr += sizeof(cfg.delayBetweenDrops);
+	EEPROM.put(eepromPtr, cfg.dropTwoSize);
+	eepromPtr += sizeof(cfg.dropTwoSize);
 	EEPROM.put(eepromPtr, cfg.delayBeforeFlash);
 	eepromPtr += sizeof(cfg.delayBeforeFlash);
-	EEPROM.put(eepromPtr, cfg.delayAfterShooting);
-	eepromPtr += sizeof(cfg.delayAfterShooting);
 	EEPROM.put(eepromPtr, cfg.delayAfterLaser);
 	eepromPtr += sizeof(cfg.delayAfterLaser);
-	EEPROM.put(eepromPtr, cfg.flashDuration);
-	eepromPtr += sizeof(cfg.flashDuration);
-	EEPROM.put(eepromPtr, cfg.cameraDuration);
-	eepromPtr += sizeof(cfg.cameraDuration);
-	EEPROM.put(eepromPtr, cfg.screenTimeout);
-	eepromPtr += sizeof(cfg.screenTimeout);
-	EEPROM.put(eepromPtr, cfg.useTwoDrops);
-	eepromPtr += sizeof(cfg.useTwoDrops);
-	EEPROM.put(eepromPtr, cfg.laserMode);
-	eepromPtr += sizeof(cfg.laserMode);
+	EEPROM.put(eepromPtr, cfg.delayAfterSound);
+	eepromPtr += sizeof(cfg.delayAfterSound);
+	EEPROM.put(eepromPtr, cfg.delayAfterShooting);
+	eepromPtr += sizeof(cfg.delayAfterShooting);
 	EEPROM.put(eepromPtr, cfg.lastWifiNum);
 	eepromPtr += sizeof(cfg.lastWifiNum);
-
+	EEPROM.put(eepromPtr, cfg.enableTouch);
+	eepromPtr += sizeof(cfg.enableTouch);
+	EEPROM.put(eepromPtr, cfg.enableButton);
+	eepromPtr += sizeof(cfg.enableButton);
+	EEPROM.put(eepromPtr, cfg.enableJoyButton);
+	eepromPtr += sizeof(cfg.enableJoyButton);
 	EEPROM.commit();
 	
 	unsigned long calculatedCrc = eeprom_crc();
@@ -500,17 +543,18 @@ void InitGPIO() {
 		
 		pinMode(JOY_MID_PIN, INPUT_PULLUP);
 		digitalWrite(JOY_MID_PIN, HIGH);
+		
 	} else {
 
 		pinMode(JOY_RIGHT_PIN, INPUT_PULLUP);
 		digitalWrite(JOY_RIGHT_PIN, HIGH);
+		
 		pinMode(JOY_UP_PIN, OUTPUT);
 		digitalWrite(JOY_UP_PIN, HIGH);
 	}
 	
-	pinMode(LASER_DETECT, INPUT);
-
-	pinMode(LASER_PIN, OUTPUT);
+	pinMode(LASER_DETECT_PIN, INPUT);
+	pinMode(LASER_EMIT_PIN, OUTPUT);
 	Turn(laser,OFF);
 }
 
@@ -581,27 +625,15 @@ void loop() {
 		String m = String("Option " + String(menuItem) + " ");
 		PrintToOLEDFullLine(3, 2, m);
 		switch (menuItem) {
-			case MENU_DELAY_BEFORE_SHOOTING:
-				PrintToOLED(0, 4, F("Pre-shoot delay "));
-				PrintToOLEDFullLine(4, 6, cfg.delayBeforeShooting);
-				break;
-			case MENU_LASER_MODE:
+			case MENU_TRIGGER_MODE:
 				PrintToOLED(0, 4, F("Use laser       "));
-				if (cfg.laserMode == fireflash) {
+				if (cfg.triggerMode == laserTriggerFlash) {
 					PrintToOLEDFullLine(2, 6, F("Yes - Flash"));
-				} else if (cfg.laserMode == firecamera) {
+				} else if (cfg.triggerMode == laserShootCamera) {
 					PrintToOLEDFullLine(2, 6, F("Yes - Camera"));
 				} else {
 					PrintToOLEDFullLine(2, 6, F("No ")); 
 				} 
-				break;
-			case MENU_DELAY_BEFORE_DROPS:
-				PrintToOLED(0, 4, F("Pre-drop delay "));
-				PrintToOLEDFullLine(4, 6, cfg.delayBeforeDrops);
-				break;
-			case MENU_DROP_ONE_SIZE:
-				PrintToOLED(0, 4, F("First drop size "));
-				PrintToOLEDFullLine(4, 6, cfg.dropOneSize);
 				break;
 			case MENU_USE_TWO_DROPS:
 				PrintToOLED(0, 4, F("Use two drops   "));
@@ -611,13 +643,49 @@ void loop() {
 					PrintToOLEDFullLine(4, 6, F("No ")); 
 				} 
 				break;
-			case MENU_DROP_TWO_SIZE:
-				PrintToOLED(0, 4, F("Second drop size"));
-				PrintToOLEDFullLine(4, 6, cfg.dropTwoSize);
+			case MENU_ENABLE_TOUCH:
+				PrintToOLED(0, 4, F("Enable touch pad"));
+				if (cfg.enableTouch) {
+					PrintToOLEDFullLine(4, 6, F("Yes"));
+				} else {
+					PrintToOLEDFullLine(4, 6, F("No ")); 
+				} 
+				break;
+			case MENU_ENABLE_BUTTON:
+				PrintToOLED(0, 4, F("Enable button   "));
+				if (cfg.enableButton) {
+					PrintToOLEDFullLine(4, 6, F("Yes"));
+				} else {
+					PrintToOLEDFullLine(4, 6, F("No ")); 
+				} 
+				break;
+			case MENU_ENABLE_JOYBUTTON:
+				PrintToOLED(0, 4, F("Enable joystick "));
+				if (cfg.enableJoyButton) {
+					PrintToOLEDFullLine(4, 6, F("Yes"));
+				} else {
+					PrintToOLEDFullLine(4, 6, F("No ")); 
+				} 
+				break;
+			case MENU_DELAY_BEFORE_SHOOTING:
+				PrintToOLED(0, 4, F("Pre-shoot delay "));
+				PrintToOLEDFullLine(4, 6, cfg.delayBeforeShooting);
+				break;
+			case MENU_DELAY_BEFORE_DROPS:
+				PrintToOLED(0, 4, F("Pre-drop delay "));
+				PrintToOLEDFullLine(4, 6, cfg.delayBeforeDrops);
+				break;
+			case MENU_DROP_ONE_SIZE:
+				PrintToOLED(0, 4, F("First drop size "));
+				PrintToOLEDFullLine(4, 6, cfg.dropOneSize);
 				break;
 			case MENU_DELAY_BETWEEN_DROPS:
 				PrintToOLED(0, 4, F("Inter drop delay"));
 				PrintToOLEDFullLine(4, 6, cfg.delayBetweenDrops);
+				break;
+			case MENU_DROP_TWO_SIZE:
+				PrintToOLED(0, 4, F("Second drop size"));
+				PrintToOLEDFullLine(4, 6, cfg.dropTwoSize);
 				break;
 			case MENU_DELAY_BEFORE_FLASH:
 				PrintToOLED(0, 4, F("Pre-flash delay "));
@@ -627,13 +695,21 @@ void loop() {
 				PrintToOLED(0, 4, F("Post-laser delay"));
 				PrintToOLEDFullLine(4, 6, cfg.delayAfterLaser);
 				break;
+			case MENU_DELAY_AFTER_SOUND:
+				PrintToOLED(0, 4, F("Post-sound delay"));
+				PrintToOLEDFullLine(4, 6, cfg.delayAfterSound);
+				break;
 			case MENU_DELAY_AFTER_SHOOTING:
 				PrintToOLED(0, 4, F("Post shoot delay"));
 				PrintToOLEDFullLine(4, 6, cfg.delayAfterShooting);
 				break;
-			case MENU_SCREEN_TIMEOUT:
-				PrintToOLED(0, 4, F("Screen timeout  "));
-				PrintToOLEDFullLine(4, 6, cfg.screenTimeout);
+			case MENU_ALIGN_LASER:
+				PrintToOLED(0, 4, F("Align Laser     "));
+				PrintToOLEDFullLine(4, 6, " ");
+				break;
+			case MENU_CALIBRATE_MIC:
+				PrintToOLED(0, 4, F("Calibrate Mic   "));
+				PrintToOLEDFullLine(4, 6, " ");
 				break;
 			case MENU_SAVE_SETTINGS:
 				PrintToOLED(0, 4, F("Save settings ? "));
@@ -659,14 +735,6 @@ void loop() {
 					PrintToOLEDFullLine(4, 6, "Off");
 				}
 				break;
-			case MENU_ALIGN_LASER:
-				PrintToOLED(0, 4, F("Align Laser     "));
-				PrintToOLEDFullLine(4, 6, " ");
-				break;
-			case MENU_SHOW_IP:
-				PrintToOLED(0, 4, F("IP Address     "));
-				PrintToOLEDFullLine(0, 6, WiFi.localIP().toString());
-				break;
 		}
 	}
 
@@ -678,7 +746,8 @@ void loop() {
 		delayVal = 0;
 	}
 
-//	bool thisTouch = false;
+	bool thisTouch = false;
+	bool thisButton = false;
 	bool thisJoyUp = false;
 	bool thisJoyDown = false;
 	bool thisJoyLeft = false;
@@ -686,41 +755,57 @@ void loop() {
 	bool thisMidState = false;
 
 	if (joystickType == DIGITAL_JOYSTICK) {
-//		int iTouch = digitalRead(TOUCH_FIRE);
 		int iJoyUp = digitalRead(JOY_UP_PIN);
 		int iJoyDown = digitalRead(JOY_DOWN_PIN);
 		int iJoyLeft = digitalRead(JOY_LEFT_PIN);
 		int iJoyRight = digitalRead(JOY_RIGHT_PIN);
-		int imidState = digitalRead(JOY_MID_PIN);
 
-//		thisTouch = (iTouch == LOW);
 		thisJoyUp = (iJoyUp == LOW);
 		thisJoyDown = (iJoyDown == LOW);
 		thisJoyLeft = (iJoyLeft == LOW);
 		thisJoyRight = (iJoyRight == LOW);
-		thisMidState = (imidState == LOW);
+
+		if (cfg.enableJoyButton) {
+			int imidState = digitalRead(JOY_MID_PIN);
+			thisMidState = (imidState == LOW);
+		}
+		if (cfg.enableTouch) {
+			int iTouch = digitalRead(TOUCH_PIN);
+			thisTouch = (iTouch == LOW);
+		}
+		if (cfg.enableButton) {
+			int iButton = digitalRead(BUTTON_PIN);
+			thisButton = (iButton == LOW);
+		}
+	
 	} else {
 
 		int iJoyLeftRight = analogRead(JOY_LEFT_PIN);
 		int iJoyUpDown = analogRead(JOY_DOWN_PIN);
-		int imidState = digitalRead(JOY_RIGHT_PIN);
 
-//		thisTouch = (iTouch == LOW);
 		thisJoyUp = (iJoyUpDown < 10);
 		thisJoyDown = (iJoyUpDown > 4080);
 		thisJoyLeft = (iJoyLeftRight > 4080);
 		thisJoyRight = (iJoyLeftRight < 10);
-		thisMidState = (imidState == LOW);
+
+		if (cfg.enableJoyButton) {
+			int imidState = digitalRead(JOY_RIGHT_PIN);
+			thisMidState = (imidState == LOW);
+		}
+		if (cfg.enableTouch) {
+			int iTouch = digitalRead(TOUCH_PIN);
+			thisTouch = (iTouch == LOW);
+		}
+		if (cfg.enableButton) {
+			int iButton = digitalRead(BUTTON_PIN);
+			thisButton = (iButton == LOW);
+		}
 		delay(100);
 	}
 
 	if (thisJoyLeft || thisJoyRight) {
 
 		// if the joystick has moved sideways, we change the setting value
-
-		// joystick has been used, so keep the screen on
-		screenTimer = cfg.screenTimeout * 1000;
-
 		// also, the screen will need to be updated
 		updateScreen = true;					
 
@@ -737,17 +822,29 @@ void loop() {
 
 		// modify the selected item
 		switch (menuItem) {
+			case MENU_TRIGGER_MODE:
+				if (cfg.triggerMode == buttonTrigger) {
+					cfg.triggerMode = laserTriggerFlash;
+				} else if (cfg.triggerMode == laserTriggerFlash) {
+					cfg.triggerMode = laserShootCamera;
+				} else {
+					cfg.triggerMode = buttonTrigger;
+				}
+				break;
+			case MENU_USE_TWO_DROPS:
+				cfg.useTwoDrops = !cfg.useTwoDrops;
+				break;
+			case MENU_ENABLE_TOUCH:
+				cfg.enableTouch = !cfg.enableTouch;
+				break;
+			case MENU_ENABLE_BUTTON:
+				cfg.enableButton = !cfg.enableButton;
+				break;
+			case MENU_ENABLE_JOYBUTTON:
+				cfg.enableJoyButton = !cfg.enableJoyButton;
+				break;
 			case MENU_DELAY_BEFORE_SHOOTING:
 				cfg.delayBeforeShooting = NormaliseIntVal(cfg.delayBeforeShooting, 10, 0, 5000);
-				break;
-			case MENU_LASER_MODE:
-				if (cfg.laserMode == off) {
-					cfg.laserMode = fireflash;
-				} else if (cfg.laserMode == fireflash) {
-					cfg.laserMode = firecamera;
-				} else {
-					cfg.laserMode = off;
-				}
 				break;
 			case MENU_DELAY_BEFORE_DROPS:
 				cfg.delayBeforeDrops = NormaliseIntVal(cfg.delayBeforeDrops, 10, 0, 5000);
@@ -755,14 +852,11 @@ void loop() {
 			case MENU_DROP_ONE_SIZE:
 				cfg.dropOneSize = NormaliseIntVal(cfg.dropOneSize, 1, 10, 300);
 				break;
-			case MENU_USE_TWO_DROPS:
-				cfg.useTwoDrops = !cfg.useTwoDrops;
+			case MENU_DELAY_BETWEEN_DROPS:
+				cfg.delayBetweenDrops = NormaliseIntVal(cfg.delayBetweenDrops, 1, 10, 2000);
 				break;
 			case MENU_DROP_TWO_SIZE:
 				cfg.dropTwoSize = NormaliseIntVal(cfg.dropTwoSize, 1, 10, 300);
-				break;
-			case MENU_DELAY_BETWEEN_DROPS:
-				cfg.delayBetweenDrops = NormaliseIntVal(cfg.delayBetweenDrops, 1, 10, 2000);
 				break;
 			case MENU_DELAY_BEFORE_FLASH:
 				cfg.delayBeforeFlash = NormaliseIntVal(cfg.delayBeforeFlash, 1, 10, 2000);
@@ -770,11 +864,17 @@ void loop() {
 			case MENU_DELAY_AFTER_LASER:
 				cfg.delayAfterLaser = NormaliseIntVal(cfg.delayAfterLaser, 1, 10, 2000);
 				break;
+			case MENU_DELAY_AFTER_SOUND:
+				cfg.delayAfterSound = NormaliseIntVal(cfg.delayAfterLaser, 1, 10, 2000);
+				break;
 			case MENU_DELAY_AFTER_SHOOTING:
 				cfg.delayAfterShooting = NormaliseIntVal(cfg.delayAfterShooting, 1, 0, 5000);
 				break;
-			case MENU_SCREEN_TIMEOUT:
-				cfg.screenTimeout = NormaliseIntVal(cfg.screenTimeout, 1, 1, 20);
+			case MENU_ALIGN_LASER:
+				RunLaserAlignment();
+				break;
+			case MENU_CALIBRATE_MIC:
+				RunMicrophoneCalibration();
 				break;
 			case MENU_SAVE_SETTINGS:
 				SaveSettings();
@@ -790,9 +890,6 @@ void loop() {
 			case MENU_TEST_SOLENOID:
 				TestSolenoid();
 				break;
-			case MENU_ALIGN_LASER:
-				RunLaserAlignment();
-				break;
 		}
 		lastJoyLeft = thisJoyLeft;
 		lastJoyRight = thisJoyRight;
@@ -800,9 +897,6 @@ void loop() {
 
 	} else if (thisJoyUp || thisJoyDown) {
 
-		// joystick has been used, so keep the screen on
-		screenTimer = cfg.screenTimeout * 1000;
-		// also, the screen will need to be updated
 		updateScreen = true;
 
 		NextMenuItem(thisJoyDown);
@@ -820,7 +914,7 @@ void loop() {
 	} else {
 
 		// check if the joystick button has been pressed, to initiate the process
-		if (thisMidState || waitingToShoot) {
+		if (thisMidState || thisButton || thisTouch || waitingToShoot) {
 			waitingToShoot = false;
 			RunSequence();
 		}
@@ -864,17 +958,19 @@ void Turn(Device device, int onOff) {
 		case flash:
 			digitalWrite(FLASH_PIN, onOff); break;
 		case laser:
-			digitalWrite(LASER_PIN, onOff); break;
+			digitalWrite(LASER_EMIT_PIN, onOff); break;
 		case solenoid:
 			digitalWrite(SOLENOID_PIN, onOff); break;
 	}
 }
 
 void RunSequence() {
-	if (cfg.laserMode == off) {
+	if (cfg.triggerMode == buttonTrigger) {
 		RunDropperSequence();
-	} else {
+	} else if (cfg.triggerMode == laserTriggerFlash || cfg.triggerMode == laserShootCamera) {
 		RunLaserSequence();
+	} else {
+		RunListenerSequence();
 	}
 }
 
@@ -910,7 +1006,7 @@ void RunDropperSequence() {
 	
 	Serial.println("Fire flash");
 	Turn(flash,ON);						// turn on the flash for the configured amount of time
-	delay(cfg.flashDuration);
+	delay(FLASH_DURATION);
 	Turn(flash,OFF);
 
 	delay(cfg.delayAfterShooting);		// wait before turning off the camera
@@ -943,7 +1039,7 @@ void RunLaserSequence() {
 			isCancelled = true;
 		} else {
 
-		 	int detected = digitalRead(LASER_DETECT);				// read Laser sensor
+		 	int detected = digitalRead(LASER_DETECT_PIN);				// read Laser sensor
 			if (detected == HIGH) {
 				isArmed = true;
 			} else {
@@ -963,14 +1059,14 @@ void RunLaserSequence() {
 
 	ClearScreen();					// turn the screen off when shooting
 
-	if (cfg.laserMode == fireflash) {
+	if (cfg.triggerMode == laserTriggerFlash) {
 		Turn(camera,ON);
 	}
 
 	// system is armed - now wait for it to be triggered - no delays on this bit
 	while (isTriggered == false && isCancelled == false) {
 
-	 	int detected = digitalRead(LASER_DETECT);				// read Laser sensor
+	 	int detected = digitalRead(LASER_DETECT_PIN);				// read Laser sensor
 		if (detected == LOW) {
 			isTriggered = true;
 		} else {
@@ -991,10 +1087,10 @@ void RunLaserSequence() {
 
 	delay(cfg.delayAfterLaser);											// wait the flash delay time to trigger flash
 
-	if (cfg.laserMode == fireflash) {
+	if (cfg.triggerMode == laserTriggerFlash) {
 
 		Turn(flash,ON);
-		delay(cfg.flashDuration);											// keep flash trigger pin high long enough to trigger flash
+		delay(FLASH_DURATION);											// keep flash trigger pin high long enough to trigger flash
 		Turn(flash,OFF);
 
 		delay(cfg.delayAfterShooting);										// wait the flash delay time to trigger flash
@@ -1003,7 +1099,7 @@ void RunLaserSequence() {
 	} else {
 
 		Turn(camera,ON);
-		delay(cfg.cameraDuration);											// keep camera trigger pin high long enough to trigger camera
+		delay(CAMERA_DURATION);											// keep camera trigger pin high long enough to trigger camera
 		Turn(camera,OFF);
 	}
 
@@ -1033,7 +1129,7 @@ void RunLaserAlignment() {
 			isCancelled = true;
 		}
 		
-	 	int detected = digitalRead(LASER_DETECT);				// read Laser sensor
+	 	int detected = digitalRead(LASER_DETECT_PIN);				// read Laser sensor
 		Serial.print("Laser pin is ");
 		if (detected == HIGH) {
 			Serial.println("HIGH");
@@ -1053,6 +1149,96 @@ void RunLaserAlignment() {
 	updateScreen = true;
 }
 
+void RunListenerSequence() {
+
+	Serial.println("Running listener sequence");
+	
+	delay(cfg.delayBeforeShooting);		// wait before startig
+
+	bool isArmed = false;
+	bool isTriggered = false;
+	bool isCancelled = false;
+
+	ClearScreen();					// turn the screen off when shooting
+
+	if (cfg.triggerMode == soundTriggerFlash) {
+		Turn(camera,ON);
+	}
+
+	// system is armed - now wait for it to be triggered - no delays on this bit
+	while (isTriggered == false && isCancelled == false) {
+
+	 	int detected = analogRead(SOUND_ANALOG_PIN);				// read Laser sensor
+		if (detected < soundCalibrationLevel) {
+			isTriggered = true;
+		} else {
+			int midState = digitalRead(JOY_MID_PIN);
+			if (midState == LOW) {
+				isCancelled = true;										// user can cancel sequence using the same button as to start
+			}
+		}
+	}
+
+	if (isCancelled) {
+		Turn(camera,OFF);
+		updateScreen = true;
+		return;
+	}
+
+	delay(cfg.delayAfterLaser);											// wait the flash delay time to trigger flash
+
+	if (cfg.triggerMode == soundTriggerFlash) {
+
+		Turn(flash,ON);
+		delay(FLASH_DURATION);											// keep flash trigger pin high long enough to trigger flash
+		Turn(flash,OFF);
+
+		delay(cfg.delayAfterShooting);										// wait the flash delay time to trigger flash
+		Turn(camera,OFF);
+
+	} else {	// soundTriggerCamera
+
+		Turn(camera,ON);
+		delay(CAMERA_DURATION);											// keep camera trigger pin high long enough to trigger camera
+		Turn(camera,OFF);
+	}
+
+
+	delay(100);														// keeps the system in a pause mode to avoid false triggers
+	Serial.println("Done sequence");
+
+	updateScreen = true;
+}
+
+void RunMicrophoneCalibration() {
+
+	Serial.println("Running microphone calibration");
+	ClearScreen();													// want the screen off when shooting
+	
+	bool isArmed = false;
+	bool isCancelled = false;
+	PrintToOLED(0, 3, F(" Calibrate mike "));
+
+	int calibrationCount = 0;
+	// getting ready
+	while (isCancelled == false && calibrationCount < 2000) {
+
+		int midState = digitalRead(JOY_MID_PIN);
+		if (midState == LOW) {
+			isCancelled = true;
+		}
+		
+	 	int detected = analogRead(SOUND_ANALOG_PIN);				// read Laser sensor
+		soundCalibrationLevel = ((detected * 3) + soundCalibrationLevel) / 4;
+
+		calibrationCount++;
+		delay(10);
+	}
+
+	ClearScreen();													// want the screen off when shooting
+	updateScreen = true;
+}
+
 void TestCamera() {
 	Serial.println("Testing camera");
 	Turn(camera,(cameraTestIsRunning ? OFF: ON));
@@ -1067,7 +1253,7 @@ void TestSolenoid() {
 
 void TestFlash() {
 	Turn(flash,ON);
-	delay(cfg.flashDuration);	// keep flash trigger pin high long enough to trigger flash
+	delay(FLASH_DURATION);	// keep flash trigger pin high long enough to trigger flash
 	Turn(flash,OFF);
 }
 
@@ -1086,7 +1272,6 @@ int NormaliseIntVal(int v, int stepamount, int minimum, int maximum) {
 	}
 	return newValue;
 }
-
 
 void PrintToOLED(int col, int row, int ival) {
 	String s = String(ival);
