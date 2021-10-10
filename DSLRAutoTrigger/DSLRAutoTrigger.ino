@@ -154,6 +154,7 @@ bool solenoidTestIsRunning = false;
 bool waitingToShoot = false;
 bool connectedToWifi = false;
 int soundCalibrationLevel = 0;
+int touchThreshold = 20;
 
 #define DIGITAL_JOYSTICK	1
 #define ANALOG_JOYSTICK		2
@@ -626,13 +627,17 @@ void loop() {
 		PrintToOLEDFullLine(3, 2, m);
 		switch (menuItem) {
 			case MENU_TRIGGER_MODE:
-				PrintToOLED(0, 4, F("Use laser       "));
+				PrintToOLED(0, 4, F("Trigger Mode    "));
 				if (cfg.triggerMode == laserTriggerFlash) {
-					PrintToOLEDFullLine(2, 6, F("Yes - Flash"));
+					PrintToOLEDFullLine(0, 6, F("Laser - Flash   "));
 				} else if (cfg.triggerMode == laserShootCamera) {
-					PrintToOLEDFullLine(2, 6, F("Yes - Camera"));
+					PrintToOLEDFullLine(0, 6, F("Laser - Camera  "));
+				} else if (cfg.triggerMode == soundTriggerFlash) {
+					PrintToOLEDFullLine(0, 6, F("Sound - Flash   "));
+				} else if (cfg.triggerMode == soundShootCamera) {
+					PrintToOLEDFullLine(0, 6, F("Sound - Camera  "));
 				} else {
-					PrintToOLEDFullLine(2, 6, F("No ")); 
+					PrintToOLEDFullLine(0, 6, F("Button          ")); 
 				} 
 				break;
 			case MENU_USE_TWO_DROPS:
@@ -770,8 +775,8 @@ void loop() {
 			thisMidState = (imidState == LOW);
 		}
 		if (cfg.enableTouch) {
-			int iTouch = digitalRead(TOUCH_PIN);
-			thisTouch = (iTouch == LOW);
+			int iTouch = touchRead(TOUCH_PIN);
+			thisTouch = (iTouch < touchThreshold);
 		}
 		if (cfg.enableButton) {
 			int iButton = digitalRead(BUTTON_PIN);
@@ -823,13 +828,7 @@ void loop() {
 		// modify the selected item
 		switch (menuItem) {
 			case MENU_TRIGGER_MODE:
-				if (cfg.triggerMode == buttonTrigger) {
-					cfg.triggerMode = laserTriggerFlash;
-				} else if (cfg.triggerMode == laserTriggerFlash) {
-					cfg.triggerMode = laserShootCamera;
-				} else {
-					cfg.triggerMode = buttonTrigger;
-				}
+				cfg.triggerMode = (TriggerMode)NormaliseIntVal((int)cfg.triggerMode, 1, 0, 4, true);
 				break;
 			case MENU_USE_TWO_DROPS:
 				cfg.useTwoDrops = !cfg.useTwoDrops;
@@ -844,31 +843,31 @@ void loop() {
 				cfg.enableJoyButton = !cfg.enableJoyButton;
 				break;
 			case MENU_DELAY_BEFORE_SHOOTING:
-				cfg.delayBeforeShooting = NormaliseIntVal(cfg.delayBeforeShooting, 10, 0, 5000);
+				cfg.delayBeforeShooting = NormaliseIntVal(cfg.delayBeforeShooting, 10, 0, 5000, false);
 				break;
 			case MENU_DELAY_BEFORE_DROPS:
-				cfg.delayBeforeDrops = NormaliseIntVal(cfg.delayBeforeDrops, 10, 0, 5000);
+				cfg.delayBeforeDrops = NormaliseIntVal(cfg.delayBeforeDrops, 10, 0, 5000, false);
 				break;
 			case MENU_DROP_ONE_SIZE:
-				cfg.dropOneSize = NormaliseIntVal(cfg.dropOneSize, 1, 10, 300);
+				cfg.dropOneSize = NormaliseIntVal(cfg.dropOneSize, 1, 10, 300, false);
 				break;
 			case MENU_DELAY_BETWEEN_DROPS:
-				cfg.delayBetweenDrops = NormaliseIntVal(cfg.delayBetweenDrops, 1, 10, 2000);
+				cfg.delayBetweenDrops = NormaliseIntVal(cfg.delayBetweenDrops, 1, 10, 2000, false);
 				break;
 			case MENU_DROP_TWO_SIZE:
-				cfg.dropTwoSize = NormaliseIntVal(cfg.dropTwoSize, 1, 10, 300);
+				cfg.dropTwoSize = NormaliseIntVal(cfg.dropTwoSize, 1, 10, 300, false);
 				break;
 			case MENU_DELAY_BEFORE_FLASH:
-				cfg.delayBeforeFlash = NormaliseIntVal(cfg.delayBeforeFlash, 1, 10, 2000);
+				cfg.delayBeforeFlash = NormaliseIntVal(cfg.delayBeforeFlash, 1, 10, 2000, false);
 				break;
 			case MENU_DELAY_AFTER_LASER:
-				cfg.delayAfterLaser = NormaliseIntVal(cfg.delayAfterLaser, 1, 10, 2000);
+				cfg.delayAfterLaser = NormaliseIntVal(cfg.delayAfterLaser, 1, 10, 2000, false);
 				break;
 			case MENU_DELAY_AFTER_SOUND:
-				cfg.delayAfterSound = NormaliseIntVal(cfg.delayAfterLaser, 1, 10, 2000);
+				cfg.delayAfterSound = NormaliseIntVal(cfg.delayAfterLaser, 1, 10, 2000, false);
 				break;
 			case MENU_DELAY_AFTER_SHOOTING:
-				cfg.delayAfterShooting = NormaliseIntVal(cfg.delayAfterShooting, 1, 0, 5000);
+				cfg.delayAfterShooting = NormaliseIntVal(cfg.delayAfterShooting, 1, 0, 5000, false);
 				break;
 			case MENU_ALIGN_LASER:
 				RunLaserAlignment();
@@ -1257,18 +1256,23 @@ void TestFlash() {
 	Turn(flash,OFF);
 }
 
-int NormaliseIntVal(int v, int stepamount, int minimum, int maximum) {
+int NormaliseIntVal(int v, int stepamount, int minimum, int maximum, bool loopValues) {
 
-	int newValue = v;
-	if (joystickRight) {
-		newValue += stepamount;
-	} else {
-		newValue -= stepamount;
-	}
+//	int newValue = v;
+//	if (joystickRight) {
+//		newValue += stepamount;
+//	} else {
+//		newValue -= stepamount;
+//	}
+
+	int newValue = v + (stepamount * (joystickRight ? 1 : -1));
+	
 	if (newValue < minimum) {
-		newValue = minimum;
+//		newValue = maximum;
+		newValue = (loopValues ? maximum : minimum);
 	} else if (newValue > maximum) {
-		newValue = maximum;
+		newValue = (loopValues ? minimum : maximum);
+//		newValue = maximum;
 	}
 	return newValue;
 }
