@@ -7,46 +7,35 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 
-	<!-- Bootstrap -->
 	<link href="bootstrap.min.css" rel="stylesheet" type="text/css">
-
-
-	<!-- JQuery -->
-	<!-- <script src="vendors/js/jquery-3.3.1.min.js"></script> -->
 	<script src="jquery-3.3.1.min.js"></script>
-
-	<link href="jquery-ui.css" rel="stylesheet" type="text/css">
-	<script src="jquery-ui.js"></script>
-
-	<!-- Bootstrap -->
 	<script src="bootstrap.bundle.min.js"></script>
 	<script src="alertify.min.js"></script>
-
-	<link rel="stylesheet" href="alertify.min.css" />
-
-	<!-- FISH-->
+	<link href="alertify.min.css" rel="stylesheet" type="text/css"/>
 	<link href="breadbun.css" rel="stylesheet" type="text/css">
-	<link href="queries.css" rel="stylesheet" type="text/css">
-	<link href="scrollbar.css" rel="stylesheet" type="text/css">
 
 </head>
 
 <body>
+	<nav class="navbar navbar-inverse navbar-expand-lg fixed-top" id="topbar">
+	
+		<!-- <ul class="navbar-nav">
+			<a class="navbar-brand" href="\"><img src="/images/fish-left-head.png" alt=""></a>
+		</ul> -->
+	
+		<ul class="navbar-nav ml-auto mr-auto">
+			<p class="navbar-title">DSLR Auto Trigger</p>
+		</ul>
+	</nav>
 
-<div class="main-container">
-	<h2 class="div-centre">DSLR Auto Trigger</h2>
+	<div class="main-container">
 	<form>
 
-		<div class="row mt-2">
+		<div class="row mt-2 d-none">
 			<p class="col-sm-12 col-md-6 col-lg-6 label" >IP Address of Controller:</p>
 			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="ipaddress">
 		</div>
 
-		<div class="row mt-2">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Pre-shoot delay (ms):</p>
-			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="delayBeforeShooting" >
-		</div>
-									
 		<div class="row mt-2">
 			<p class="col-sm-12 col-md-6 col-lg-6 label" >Mode:</p>
 			<select class="form-control form-input x-form-select col-sm-12 col-md-6 col-lg-6" id="triggerMode">
@@ -59,6 +48,11 @@
 
 		</div>
 
+		<div class="row mt-2">
+			<p class="col-sm-12 col-md-6 col-lg-6 label" >Pre-shoot delay (ms):</p>
+			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="delayBeforeShooting" >
+		</div>
+									
 		<div class="row mt-2 drops">
 			<p class="col-sm-12 col-md-6 col-lg-6 label" >Pre-drop delay (ms):</p>
 			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="delayBeforeDrops" >
@@ -101,6 +95,22 @@
 			<p class="col-sm-12 col-md-6 col-lg-6 label" >Post shoot delay:</p>
 			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="delayAfterShooting">
 		</div>
+
+		<div class="row mt-2">
+			<p class="col-sm-12 col-md-6 col-lg-6 label" >Enable Button:</p>
+			<input type="checkbox" class="form-control form-input check-input x-form-check" id="enableButton">
+		</div>
+
+		<div class="row mt-2">
+			<p class="col-sm-12 col-md-6 col-lg-6 label" >Enable Joystick Button:</p>
+			<input type="checkbox" class="form-control form-input check-input x-form-check" id="enableJoyButton">
+		</div>
+
+		<div class="row mt-2">
+			<p class="col-sm-12 col-md-6 col-lg-6 label" >Enable Touch Pad:</p>
+			<input type="checkbox" class="form-control form-input check-input x-form-check" id="enableTouch">
+		</div>
+
 		<!-- <div class="row" id="row-search">
 			<div class="col-sm-4 col-md-4 col-lg-4 div-centre mt-2">
 				<button class="btn btn-secondary btn-centre" id="btn-testcam" >
