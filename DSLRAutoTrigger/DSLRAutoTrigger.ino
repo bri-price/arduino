@@ -388,32 +388,10 @@ void InitServer() {
 	PrintToOLED(0, 5, F("	Init server	 "));
 
 	server.on("/", HTTP_GET, [] (AsyncWebServerRequest *request) {
-		Serial.println("Got / request");
-		Serial.println("Done");
-		Serial.println("Done");
 		request->send(SPIFFS, "/index.html", "text/html");
 	});
 
-/*
-
-alertify.min.js
-autotrigger.js
-bootstrap.bundle.min.js
-bootstrap.bundle.min.js.map
-
-bootstrap.min.css.map
-
-checkbox-blank.png
-checkbox-check.png
-index.html
-jquery-3.3.1.min.js
-.css
-jquery-ui.js
-Roboto-Light.ttf
-RobotoCondensed-Light.ttf
-*/
-  
-	server.on("/alertify.min.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
+ 	server.on("/alertify.min.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/alertify.min.css", "text/css");
 	});
 	server.on("/bootstrap.min.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
@@ -422,11 +400,29 @@ RobotoCondensed-Light.ttf
 	server.on("/breadbun.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/breadbun.css", "text/css");
 	});
-	server.on("/jquery-ui.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
-		request->send(SPIFFS, "/jquery-ui.css", "text/css");
-	});
 	server.on("/alertify.min.js", HTTP_GET, [] (AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/alertify.min.js", "text/script");
+	});
+	server.on("/autotrigger.js", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/autotrigger.js", "text/script");
+	});
+	server.on("/bootstrap.bundle.min.js", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/bootstrap.bundle.min.js", "text/script");
+	});
+	server.on("/jquery-3.3.1.min.js", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/jquery-3.3.1.min.js", "text/script");
+	});
+	server.on("/blank.png", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/blank.png", "text/script");
+	});
+	server.on("/check.png", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/check.png", "text/script");
+	});
+	server.on("/RobotoCondensed-Light.ttf", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/RobotoCondensed-Light.ttf", "text/script");
+	});
+	server.on("/index.html", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/index.html", "text/script");
 	});
 
     server.on("/shoot", HTTP_POST, [] (AsyncWebServerRequest *request) {
@@ -700,6 +696,7 @@ void InitGPIO() {
 	
 	pinMode(LASER_DETECT_PIN, INPUT);
 	pinMode(LASER_EMIT_PIN, OUTPUT);
+	pinMode(BUTTON_PIN, INPUT_PULLUP);
 	Turn(laser,OFF);
 }
 
@@ -772,7 +769,7 @@ void loop() {
 			PrintToOLEDFullLine(0, 1, "disconnected");
 		}
 		String m = String("Option " + String(menuItem) + " ");
-		PrintToOLEDFullLine(3, 2, m);
+		PrintToOLEDFullLine(3, 3, m);
 		switch (menuItem) {
 			case MENU_TRIGGER_MODE:
 				PrintToOLED(0, 4, F("Trigger Mode    "));
