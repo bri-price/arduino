@@ -1,9 +1,107 @@
 /*
-	Use board: "ESP 32 Wrover Module"
 
-	0,2,4,15,32,33 are touch pins
-	34,35,36,39 are input only
+This sketch is written to work on an ESP32 dev kit board, for which I have designed a circuit board
+Use board: "ESP 32 Wrover Module"
 
+	(Note: 0,2,4,15,32,33 are touch pins, 34,35,36,39 are input only)
+
+The sketch is designed to allow users to shoot a camera and fire a flash, to capture images in a controlled manner. It can be run in one of three modes:
+
+	1. Water dropper mode: a solenoid is opened to create one or two water drops, which are then photographed when they hit a liquid below.
+		The sequence is as follows:
+			Open camera shutter (should be in Bulb mode)
+			Open solenoid, wait, close solenoid, to get a drop of water.
+			(If configured, wait, then open and close the solenoid again for a second drop of water)
+			Wait
+			Fire the flash
+			Wait
+			Close the camera shutter
+
+		Use of a second drop is set in the configuration. All wait times are set in the configuration.
+
+	2. Laser mode (flash): a laser emitter and sensor are aligned, and when something then breaks the beam, a photograph is taken
+		The sequence is as follows:
+			Open camera shutter (should be in Bulb mode)
+			Wait until the beam is broken
+			Wait
+			Fire the flash
+			Wait
+			Close the camera shutter
+
+		Configuration screens allow the user to align the laser with the sensor. All wait times are set in the configuration.
+		
+	3. Laser mode (camera): a laser emitter and sensor are aligned, and when something then breaks the beam, a photograph is taken
+		The sequence is as follows:
+			Wait until the beam is broken
+			Wait
+			Shoot the camera
+			Wait
+
+		Configuration screens allow the user to align the laser with the sensor. All wait times are set in the configuration.
+	
+	4. Sound mode (flash): a photograph is taken when the sound level goes high enough
+		The sequence is as follows:
+			Open camera shutter (should be in Bulb mode)
+			Wait until the sound level goes up
+			Wait
+			Fire the flash
+			Wait
+			Close the camera shutter
+
+		Configuration screens allow the sound level to be calibrated to the background level. All wait times are set in the configuration.
+		
+	5. Sound mode (camera): a photograph is taken when the sound level goes high enough
+		The sequence is as follows:
+			Wait until the sound level goes up
+			Wait
+			Shoot the camera
+			Wait
+
+		Configuration screens allow the sound level to be calibrated to the background level. All wait times are set in the configuration.
+	
+	The sequences can be triggered by pressing the button on the joystick, a separate button, or touching a capacitive touch plate (depending on config)
+
+All configuration and mode settings can be done either by using a joystick to set the configuration on an attached OLED screen, or by connecting to the controller via a wifi hotspot and sending the configuration values from a web page.
+
+Configuration options are as follows:
+
+		Trigger Mode: 			toggle between the 5 trigger modes
+
+	Mode 1:
+	
+		Use Two Drops:			true or false - sets the controller to release one or two drops
+		Delay Before Shooting:	delay (in ms) between triggering the sequence to opening the camera shutter
+		Delay Before Drops:		delay (in ms) between opening the camera shutter and starting the first drop
+		Drop One Size:			time (in ms) to open the solenoid for the first drop
+		Delay Between Drops:	delay (in ms) between closing the solenoid after the first drop to opening it for the second
+		Drop Two Size:			time (in ms) to open the solenoid for the second drop (if configured)
+		Delay Before Flash:		delay (in ms) between closing the solenoid after the final drop, to firing the flash
+
+	Modes 2 & 3:
+		Delay After Laser:		delay (in ms) between detecting the laser beam is broken and firing the flash (depending on configuration)
+
+	Modes 4 & 5:	
+		Delay After Sound:		delay (in ms) between detecting the sound level increase and firing the flash (depending on configuration)
+
+	All modes:
+		Delay After Shooting:	delay (in ms) between firing the flash and closing the shutter
+		Enable Touch:			enable the capacitive touch sensor to initiate the sequence
+		Enable Button:			enable the standalone button to initiate the sequence
+		Enable Joy Button:		enable the joystick button to initiate the sequence
+
+	The configuration screens also have the following options:
+
+		Test Camera:			opens/closes the camera shutter, to test the physical cable connection is working
+		Test Flash:				fires the flash, to test the physical cable connection is working
+		Test Solenoid:			opens/closes the solenoid, to test the physical cable connection is working
+
+		Align Laser:			helps the user align the laser with the sensor
+		Calibrate Mic:			reads the background sound level to calibrate the sensor
+
+		Save Settings:			saves all settings to the ESP32 EEPROM
+
+
+	
 */
 #include <AsyncTCP.h>
 #include <AsyncEventSource.h>
@@ -16,6 +114,7 @@
 #include <WebAuthentication.h>
 #include <WebHandlerImpl.h>
 #include <WebResponseImpl.h>
+#include "SPIFFS.h"
 
 #include <EEPROM.h>
 #include <U8x8lib.h>
@@ -24,8 +123,9 @@
 
 #include "Secrets.h"
 
-char ssid[3][11] = { SECRET_SSID1, SECRET_SSID2, SECRET_SSID3 };
-char password[3][64] = { SECRET_PASS1, SECRET_PASS2, SECRET_PASS3 };
+// you can put up to 3 SSID/PASSWORD combinations in your secrets.h file and the code will try each in turn
+char ssid[3][11] = { SECRET_SSID1, SECRET_SSID2, SECRET_SSID2 };
+char password[3][64] = { SECRET_PASS1, SECRET_PASS2, SECRET_PASS2 };
 
 #define	ON				HIGH
 #define OFF				LOW
@@ -49,7 +149,6 @@ enum TriggerMode {
 
 //	0,2,4,15,32,33 are touch pins
 //	34,35,36,39 are input only
-
 
 // optocouplers
 #define CAMERA_PIN			18
@@ -105,7 +204,6 @@ enum TriggerMode {
 #define MENU_ENABLE_TOUCH				18
 #define MENU_ENABLE_BUTTON				19
 #define MENU_ENABLE_JOYBUTTON			20
-
 
 // always update this if you add an item to the list above
 #define NUM_MENU_ITEMS					20
@@ -166,6 +264,14 @@ U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(SCL, SDA, U8X8_PIN_NONE);	 // OLEDs witho
 
 // Run a web server on port 80
 AsyncWebServer server(80);
+
+boolean InitSPIFFS() {
+  if(!SPIFFS.begin(true)){
+    Serial.println("An Error has occurred while mounting SPIFFS");
+    return false;
+  }
+  return true;
+}
 
 boolean InitWifiSSID(char *ssid, char *pass) {
 
@@ -252,15 +358,11 @@ bool MenuItemIsActive() {
 	}
 }
 
-void NextMenuItem(bool goingDown) {
+void NextMenuItem(int menuDirection) {
 
 	// move to the next menu item either up or down. Skip any that should
 	// not be active, and loop round if it goes past the first or last
-	if (goingDown) {
-		menuItem++;
-	} else {
-		menuItem--;
-	}
+	menuItem += menuDirection;
 	
 	// loop around
 	if (menuItem == 0) {
@@ -271,7 +373,7 @@ void NextMenuItem(bool goingDown) {
 
 	// do this after looping, in case the first or last one should not be active
 	if (!MenuItemIsActive()) {
-		NextMenuItem(goingDown);
+		NextMenuItem(menuDirection);
 	}
 }
 
@@ -284,6 +386,48 @@ void InitServer() {
 	
 	Serial.println("Initialising server");
 	PrintToOLED(0, 5, F("	Init server	 "));
+
+	server.on("/", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		Serial.println("Got / request");
+		Serial.println("Done");
+		Serial.println("Done");
+		request->send(SPIFFS, "/index.html", "text/html");
+	});
+
+/*
+
+alertify.min.js
+autotrigger.js
+bootstrap.bundle.min.js
+bootstrap.bundle.min.js.map
+
+bootstrap.min.css.map
+
+checkbox-blank.png
+checkbox-check.png
+index.html
+jquery-3.3.1.min.js
+.css
+jquery-ui.js
+Roboto-Light.ttf
+RobotoCondensed-Light.ttf
+*/
+  
+	server.on("/alertify.min.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/alertify.min.css", "text/css");
+	});
+	server.on("/bootstrap.min.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/bootstrap.min.css", "text/css");
+	});
+	server.on("/breadbun.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/breadbun.css", "text/css");
+	});
+	server.on("/jquery-ui.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/jquery-ui.css", "text/css");
+	});
+	server.on("/alertify.min.js", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/alertify.min.js", "text/script");
+	});
 
     server.on("/shoot", HTTP_POST, [] (AsyncWebServerRequest *request) {
 		AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "OK");
@@ -593,19 +737,23 @@ void InitWifi() {
 void setup() {
 
 	InitSerial();
-	Serial.println("InitConfig");
+	Serial.println("Init Config");
 	InitConfig();
-	Serial.println("InitGPIO");
+	Serial.println("Init GPIO");
 	InitGPIO();
-	Serial.println("InitOLED");
+	Serial.println("Init OLED");
 	InitOLED();
 
 	if (joystickType == DIGITAL_JOYSTICK) {
-		Serial.println("InitWifi");
+		Serial.println("Init Wifi");
 		InitWifi();
-		Serial.println("InitServer");
+		Serial.println("Init Server");
 		InitServer();
 	}
+
+	Serial.println("Init SPIFFS");
+	InitSPIFFS();
+	
 	delay(400);
 	Serial.println("ResetOLED");
 	ResetOLED();
@@ -898,7 +1046,7 @@ void loop() {
 
 		updateScreen = true;
 
-		NextMenuItem(thisJoyDown);
+		NextMenuItem(thisJoyUp ? -1 : 1);
 		delayVal = downwardsDelay;
 
 		cameraTestIsRunning = false;
