@@ -250,6 +250,10 @@ double accelerationFactor = 1.3;
 bool cameraTestIsRunning = false;
 bool solenoidTestIsRunning = false;
 bool waitingToShoot = false;
+bool waitingToTestCamera = false;
+bool waitingToTestFlash = false;
+bool waitingToTestSolenoid = false;
+
 bool connectedToWifi = false;
 int soundCalibrationLevel = 0;
 int touchThreshold = 20;
@@ -390,24 +394,11 @@ void InitServer() {
 	server.on("/", HTTP_GET, [] (AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/index.html", "text/html");
 	});
-
- 	server.on("/alertify.min.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
-		request->send(SPIFFS, "/alertify.min.css", "text/css");
-	});
-	server.on("/bootstrap.min.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
-		request->send(SPIFFS, "/bootstrap.min.css", "text/css");
-	});
 	server.on("/breadbun.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/breadbun.css", "text/css");
 	});
-	server.on("/alertify.min.js", HTTP_GET, [] (AsyncWebServerRequest *request) {
-		request->send(SPIFFS, "/alertify.min.js", "text/script");
-	});
 	server.on("/autotrigger.js", HTTP_GET, [] (AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/autotrigger.js", "text/script");
-	});
-	server.on("/bootstrap.bundle.min.js", HTTP_GET, [] (AsyncWebServerRequest *request) {
-		request->send(SPIFFS, "/bootstrap.bundle.min.js", "text/script");
 	});
 	server.on("/jquery-3.3.1.min.js", HTTP_GET, [] (AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/jquery-3.3.1.min.js", "text/script");
@@ -418,12 +409,31 @@ void InitServer() {
 	server.on("/check.png", HTTP_GET, [] (AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/check.png", "text/script");
 	});
-	server.on("/RobotoCondensed-Light.ttf", HTTP_GET, [] (AsyncWebServerRequest *request) {
-		request->send(SPIFFS, "/RobotoCondensed-Light.ttf", "text/script");
-	});
 	server.on("/index.html", HTTP_GET, [] (AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/index.html", "text/script");
 	});
+
+	server.on("/test/camera", HTTP_POST, [] (AsyncWebServerRequest *request) {
+		AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "OK");
+		response->addHeader("Access-Control-Allow-Origin", "*");
+		request->send(response);
+		waitingToTestCamera = true;
+	});
+
+	server.on("/test/flash", HTTP_POST, [] (AsyncWebServerRequest *request) {
+		AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "OK");
+		response->addHeader("Access-Control-Allow-Origin", "*");
+		request->send(response);
+		waitingToTestFlash = true;
+	});
+	
+	server.on("/test/solenoid", HTTP_POST, [] (AsyncWebServerRequest *request) {
+		AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "OK");
+		response->addHeader("Access-Control-Allow-Origin", "*");
+		request->send(response);
+		waitingToTestSolenoid = true;
+	});
+
 
     server.on("/shoot", HTTP_POST, [] (AsyncWebServerRequest *request) {
 		AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "OK");
@@ -462,6 +472,76 @@ void InitServer() {
 		serializeJson(data, *response);
 		request->send(response);
 		Serial.println("API call GET /settings");
+	});
+
+	server.on("/settings", HTTP_POST, [] (AsyncWebServerRequest *request) {
+
+		int params = request->params();
+		Serial.printf("%d params sent in\n", params);
+		for (int i = 0; i < params; i++) {
+			AsyncWebParameter *p = request->getParam(i);
+			if (p->isPost()) {
+				if (p->name() == "body") {
+
+					StaticJsonDocument<1024> doc;
+					deserializeJson(doc, (char *)p->value().c_str());
+		
+					if (doc.containsKey("triggerMode") ) {
+						cfg.triggerMode = doc["triggerMode"];
+					}
+					if (doc.containsKey("useTwoDrops") ) {
+						cfg.useTwoDrops = doc["useTwoDrops"];
+					}
+					if (doc.containsKey("delayBeforeShooting") ) {
+						cfg.delayBeforeShooting = doc["delayBeforeShooting"];
+					}
+					if (doc.containsKey("delayBeforeDrops") ) {
+						cfg.delayBeforeDrops = doc["delayBeforeDrops"];
+					}
+					if (doc.containsKey("dropOneSize") ) {
+						cfg.dropOneSize = doc["dropOneSize"];
+					}
+					if (doc.containsKey("delayBetweenDrops") ) {
+						cfg.delayBetweenDrops = doc["delayBetweenDrops"];
+					}
+					if (doc.containsKey("dropTwoSize") ) {
+						cfg.dropTwoSize = doc["dropTwoSize"];
+					}
+					if (doc.containsKey("delayBeforeFlash") ) {
+						cfg.delayBeforeFlash = doc["delayBeforeFlash"];
+					}
+					if (doc.containsKey("delayAfterLaser") ) {
+						cfg.delayAfterLaser = doc["delayAfterLaser"];
+					}
+					if (doc.containsKey("delayAfterSound") ) {
+						cfg.delayAfterLaser = doc["delayAfterSound"];
+					}
+					if (doc.containsKey("delayAfterShooting") ) {
+						cfg.delayAfterShooting = doc["delayAfterShooting"];
+					}
+					if (doc.containsKey("enableTouch") ) {
+						cfg.enableTouch = doc["enableTouch"];
+					}
+					if (doc.containsKey("enableButton") ) {
+						cfg.enableButton = doc["enableButton"];
+					}
+					if (doc.containsKey("enableJoyButton") ) {
+						cfg.enableJoyButton = doc["enableJoyButton"];
+					}
+		
+					SaveSettings();
+					updateScreen = true;
+				}
+				AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "Done");
+				response->addHeader("Access-Control-Allow-Origin", "*");
+				request->send(response);
+				waitingToShoot = true;
+				return;
+			}
+		}
+		AsyncWebServerResponse *response = request->beginResponse(400, "text/plain", "No body");
+		response->addHeader("Access-Control-Allow-Origin", "*");
+		request->send(response);
 	});
 
 	server.on("/settings", HTTP_POST, [] (AsyncWebServerRequest *request) {
@@ -951,6 +1031,21 @@ void loop() {
 			thisButton = (iButton == LOW);
 		}
 		delay(100);
+	}
+
+	if (waitingToTestCamera) {
+		waitingToTestCamera = false;
+		TestCamera();
+	}
+
+	if (waitingToTestFlash) {
+		waitingToTestFlash = false;
+		TestFlash();
+	}
+
+	if (waitingToTestSolenoid) {
+		waitingToTestSolenoid = false;
+		TestSolenoid();
 	}
 
 	if (thisJoyLeft || thisJoyRight) {

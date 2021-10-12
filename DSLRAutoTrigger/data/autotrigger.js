@@ -1,6 +1,4 @@
-//var hideClass = 'disabled';
 var hideClass = 'd-none';
-
 
 function GetURL(endpoint) {
 	return window.location.protocol + "//" + window.location.host + '/' + endpoint;
@@ -8,18 +6,6 @@ function GetURL(endpoint) {
 
 function isEmpty(str) {
 	return (!str || 0 === str.length);
-}
-
-function ShowNotificationMessage(message) {
-	alertify.notify(message, 'warning', 5);
-}
-
-function ShowSuccessMessage(message) {
-	alertify.notify(message, 'success', 5);
-}
-
-function ShowErrorMessage(message) {
-	alertify.notify(message, 'error', 5);
 }
 
 var settings = {
@@ -32,9 +18,6 @@ var settings = {
 	delayAfterShooting: 100,
 	delayAfterLaser: 50,
 	delayAfterSound: 0,
-	flashDuration: 5,
-	cameraDuration: 350,
-	screenTimeout: 5,
 	useTwoDrops: false,
 	enableTouch: false,
 	enableButton: false,
@@ -46,16 +29,28 @@ $('form').submit(function(){
 	return false;
 });
 
+function ShowMessage(message) {
+
+	$('.alertify').html(message);
+	$('.alertify').removeClass('d-none');
+	setTimeout(function() { 
+		$('.alertify').addClass('d-none');
+	}, 3000);
+}
+
 $('#btn-shoot').click(function() {
+
+	ReadSettings();
+	var data = JSON.stringify(settings)
 	var url = GetURL('shoot');
 	$.ajax({
 		type: 'POST', 
 		url: url,
+		data: data
 	});
 });
 
-$('#btn-settings').click(function() {
-
+function ReadSettings() {
 	$.each(settings, function(key, element) {
 
 		if ($('#'+key).hasClass('x-form-check')) {
@@ -67,7 +62,11 @@ $('#btn-settings').click(function() {
 			settings[key] = v;
 		}
 	});
+}
 
+$('#btn-settings').click(function() {
+
+	ReadSettings();
 	var data = JSON.stringify(settings)
 	var url = GetURL('settings');
 
@@ -77,11 +76,34 @@ $('#btn-settings').click(function() {
 		data: data
 	}).done(function(_, _, s) {
 		if (s.status === 200) {
-			ShowSuccessMessage('Pushed settings to controller');
+			ShowMessage('Pushed settings to controller');
 		}
 	});
 });
 
+$('#btn-testcam').click(function() {
+	var url = GetURL('test/camera');
+	$.ajax({
+		type: 'POST', 
+		url: url
+	});
+});
+
+$('#btn-testflash').click(function() {
+	var url = GetURL('test/flash');
+	$.ajax({
+		type: 'POST', 
+		url: url
+	});
+});
+
+$('#btn-testsol').click(function() {
+	var url = GetURL('test/solenoid');
+	$.ajax({
+		type: 'POST', 
+		url: url
+	});
+});
 
 $('#btn-getsettings').click(function() {
 
@@ -107,7 +129,7 @@ $('#btn-getsettings').click(function() {
 		UseCheckboxValues();
 
 		if (s.status === 200) {
-			ShowSuccessMessage('Got settings from controller');
+			ShowMessage('Got settings from controller');
 		}
 	});
 });

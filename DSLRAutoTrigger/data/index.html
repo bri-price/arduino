@@ -7,38 +7,27 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 
-	<link href="bootstrap.min.css" rel="stylesheet" type="text/css">
 	<script src="jquery-3.3.1.min.js"></script>
-	<script src="bootstrap.bundle.min.js"></script>
-	<script src="alertify.min.js"></script>
-	<link href="alertify.min.css" rel="stylesheet" type="text/css"/>
+	<link href="index.css" rel="stylesheet" type="text/css">
 	<link href="breadbun.css" rel="stylesheet" type="text/css">
 
 </head>
 
 <body>
 	<nav class="navbar navbar-inverse navbar-expand-lg fixed-top" id="topbar">
-	
-		<!-- <ul class="navbar-nav">
-			<a class="navbar-brand" href="\"><img src="/images/fish-left-head.png" alt=""></a>
-		</ul> -->
-	
-		<ul class="navbar-nav ml-auto mr-auto">
-			<p class="navbar-title">DSLR Auto Trigger</p>
-		</ul>
+		<p class="navbar-title">DSLR Auto Trigger</p>
 	</nav>
 
-	<div class="main-container">
-	<form>
+	<div class="container row gap-2 justify-center">
 
 		<div class="row mt-2 d-none">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >IP Address of Controller:</p>
-			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="ipaddress">
+			<p class="col-half label" >IP Address of Controller:</p>
+			<input type="text" class="form-control col-half" id="ipaddress">
 		</div>
 
-		<div class="row mt-2">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Mode:</p>
-			<select class="form-control form-input x-form-select col-sm-12 col-md-6 col-lg-6" id="triggerMode">
+		<div class="row mt-2 justify-center">
+			<p class="col-half label" >Mode:</p>
+			<select class="form-control form-input x-form-select col-half" id="triggerMode">
 				<option value="0">Button - Trigger drops</option>
 				<option value="1">Laser - Trigger Flash</option>
 				<option value="2">Laser - Trigger Camera</option>
@@ -48,119 +37,116 @@
 
 		</div>
 
-		<div class="row mt-2">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Pre-shoot delay (ms):</p>
-			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="delayBeforeShooting" >
+		<div class="row mt-2 justify-center">
+			<p class="col-half label" >Pre-shoot delay (ms):</p>
+			<input type="text" class="form-control col-half" id="delayBeforeShooting" >
 		</div>
 									
 		<div class="row mt-2 drops">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Pre-drop delay (ms):</p>
-			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="delayBeforeDrops" >
+			<p class="col-half label" >Pre-drop delay (ms):</p>
+			<input type="text" class="form-control col-half" id="delayBeforeDrops" >
 		</div>
 			
 		<div class="row mt-2 drops">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >First drop size:</p>
-			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="dropOneSize" >
+			<p class="col-half label" >First drop size:</p>
+			<input type="text" class="form-control col-half" id="dropOneSize" >
 		</div>
 		<!-- use two drops -->
 		<div class="row mt-2 drops">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Use two drops:</p>
+			<p class="col-half label" >Use two drops:</p>
 			<input type="checkbox" class="form-control form-input check-input x-form-check" id="useTwoDrops">
 		</div>
 		<div class="row mt-2 drops twodrops">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Second drop size:</p>
-			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="dropTwoSize">
+			<p class="col-half label" >Second drop size:</p>
+			<input type="text" class="form-control col-half" id="dropTwoSize">
 		</div>
 		<div class="row mt-2 drops twodrops">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Inter drop delay:</p>
-			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="delayBetweenDrops">
+			<p class="col-half label" >Inter drop delay:</p>
+			<input type="text" class="form-control col-half" id="delayBetweenDrops">
 		</div>
 			
 		<div class="row mt-2 drops">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Pre-flash delay:</p>
-			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="delayBeforeFlash">
+			<p class="col-half label" >Pre-flash delay:</p>
+			<input type="text" class="form-control col-half" id="delayBeforeFlash">
 		</div>
 
 		<div class="row mt-2 laser">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Post laser delay:</p>
-			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="delayAfterLaser">
+			<p class="col-half label" >Post laser delay:</p>
+			<input type="text" class="form-control col-half" id="delayAfterLaser">
 		</div>
 			
 		<div class="row mt-2 sound">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Post sound delay:</p>
-			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="delayAfterSound">
+			<p class="col-half label" >Post sound delay:</p>
+			<input type="text" class="form-control col-half" id="delayAfterSound">
 		</div>
 
 		<div class="row mt-2">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Post shoot delay:</p>
-			<input type="text" class="form-control col-sm-12 col-md-6 col-lg-6" id="delayAfterShooting">
+			<p class="col-half label" >Post shoot delay:</p>
+			<input type="text" class="form-control col-half" id="delayAfterShooting">
 		</div>
 
 		<div class="row mt-2">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Enable Button:</p>
+			<p class="col-half label" >Enable Button:</p>
 			<input type="checkbox" class="form-control form-input check-input x-form-check" id="enableButton">
 		</div>
 
 		<div class="row mt-2">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Enable Joystick Button:</p>
+			<p class="col-half label" >Enable Joystick Button:</p>
 			<input type="checkbox" class="form-control form-input check-input x-form-check" id="enableJoyButton">
 		</div>
 
 		<div class="row mt-2">
-			<p class="col-sm-12 col-md-6 col-lg-6 label" >Enable Touch Pad:</p>
+			<p class="col-half label" >Enable Touch Pad:</p>
 			<input type="checkbox" class="form-control form-input check-input x-form-check" id="enableTouch">
 		</div>
 
-		<!-- <div class="row" id="row-search">
-			<div class="col-sm-4 col-md-4 col-lg-4 div-centre mt-2">
-				<button class="btn btn-secondary btn-centre" id="btn-testcam" >
-					<i class="far fa-camera btn-icon"></i> Test Camera
+		<div class="row mt-2">
+			<div class="col-half div-centre">
+				<button class="btn btn-secondary btn-centre" id="btn-getsettings" >
+					<i class="far fa-cogs btn-icon"></i> Get Settings
 				</button>
 			</div>
-			<div class="col-sm-4 col-md-4 col-lg-4 div-centre mt-2">
-				<button class="btn btn-succes btn-centre" id="btn-testflash" >
-					<i class="far fa-bolt btn-icon"></i> Test Flash
+			<div class="col-half div-centre">
+				<button class="btn btn-secondary btn-centre" id="btn-settings" >
+					<i class="far fa-cogs btn-icon"></i> Set Settings
 				</button>
-			</div>
-			<div class="col-sm-4 col-md-4 col-lg-4 div-centre mt-2">
-				<button class="btn btn-succes btn-centre" id="btn-testsol" >
-					<i class="fas fa-faucet-drip btn-icon"></i> Test Solenoid
-				</button>
-			</div>
-		</div> -->
-		<div class="row">
-			<div class="col-sm-12 col-md-6 col-lg-6 div-centre mt-2">
-			</div>
-			<div class="col-sm-12 col-md-6 col-lg-6 div-centre mt-2">
-				<div class="row p-0">
-					<div class="col-sm-6 div-centre mt-2">
-						<button class="btn btn-secondary btn-centre" id="btn-getsettings" >
-							<i class="far fa-cogs btn-icon"></i> Get Settings
-						</button>
-					</div>
-					<div class="col-sm-6 div-centre mt-2">
-						<button class="btn btn-secondary btn-centre" id="btn-settings" >
-							<i class="far fa-cogs btn-icon"></i> Set Settings
-						</button>
-					</div>
-				</div>
 			</div>
 		</div>
 
-			<div class="row mt-3">
-				<div class="col-lg-12 div-centre mt-3">
-				<button class="btn btn-success btn-centre btn-large" id="btn-shoot" >
+		<div class="row mt-3">
+			<div class="col-full div-centre">
+				<button class="btn btn-success btn-centre btn-large col-full" id="btn-shoot" >
 					<i class="far fa-camera btn-icon"></i> Shoot
 				</button>
 			</div>
 		</div>
 
+		<div class="row mt-3" id="row-search">
+			<div class="col-third div-centre">
+				<button class="btn btn-secondary btn-centre" id="btn-testcam" >
+					<i class="far fa-camera btn-icon"></i> Test Camera
+				</button>
+			</div>
+			<div class="col-third div-centre">
+				<button class="btn btn-succes btn-centre" id="btn-testflash" >
+					<i class="far fa-bolt btn-icon"></i> Test Flash
+				</button>
+			</div>
+			<div class="col-third div-centre">
+				<button class="btn btn-succes btn-centre" id="btn-testsol" >
+					<i class="fas fa-faucet-drip btn-icon"></i> Test Solenoid
+				</button>
+			</div>
 		</div>
-	</form>
+		
+
+	</div>
+
+	<div class="alertify d-none">
+Message here
+	</div>
 </div>
 
-<!-- <script src="apicalls.js"></script> -->
-<script src="fish.js"></script>
 <script src="autotrigger.js"></script>
 
 </body>
