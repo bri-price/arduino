@@ -397,6 +397,9 @@ void InitServer() {
 	server.on("/breadbun.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/breadbun.css", "text/css");
 	});
+	server.on("/index.css", HTTP_GET, [] (AsyncWebServerRequest *request) {
+		request->send(SPIFFS, "/index.css", "text/css");
+	});
 	server.on("/autotrigger.js", HTTP_GET, [] (AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/autotrigger.js", "text/script");
 	});
