@@ -1536,7 +1536,7 @@ void PrintToOLEDFullLine(int col, int row, const char * message) {
 	PrintToOLEDFullLine(col, row, s);
 }
 
-void PrintToOLED(int col, int row, String	message) {
+void PrintToOLED(int col, int row, String message) {
 	const char *mes = message.c_str();
 	PrintToOLED(col, row, mes);
 }
