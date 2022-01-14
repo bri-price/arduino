@@ -151,8 +151,8 @@ enum TriggerMode {
 //	34,35,36,39 are input only
 
 // optocouplers
-#define CAMERA_PIN			18
-#define FOCUS_PIN			5
+#define CAMERA_PIN			5
+#define FOCUS_PIN			18
 #define FLASH_PIN			19
 
 // laser detector
@@ -204,9 +204,11 @@ enum TriggerMode {
 #define MENU_ENABLE_TOUCH				18
 #define MENU_ENABLE_BUTTON				19
 #define MENU_ENABLE_JOYBUTTON			20
+#define MENU_DEBUG_MIC					21
+
 
 // always update this if you add an item to the list above
-#define NUM_MENU_ITEMS					20
+#define NUM_MENU_ITEMS					21
 
 // configurable values - saved in eeprom
 typedef struct {
@@ -334,6 +336,7 @@ bool MenuItemIsActive() {
 			menuItem == MENU_USE_TWO_DROPS ||
 			menuItem == MENU_DROP_TWO_SIZE ||
 			menuItem == MENU_CALIBRATE_MIC ||
+			menuItem == MENU_DEBUG_MIC ||
 			menuItem == MENU_DELAY_AFTER_SOUND ||
 			menuItem == MENU_TEST_SOLENOID ||
 			menuItem == MENU_DELAY_BETWEEN_DROPS ||
@@ -356,6 +359,7 @@ bool MenuItemIsActive() {
 		if (menuItem == MENU_DELAY_AFTER_LASER || 
 			menuItem == MENU_DELAY_AFTER_SOUND ||
 			menuItem == MENU_CALIBRATE_MIC ||
+			menuItem == MENU_DEBUG_MIC ||
 			menuItem == MENU_ALIGN_LASER) {
 			return false;
 		}
@@ -517,7 +521,7 @@ void InitServer() {
 						cfg.delayAfterLaser = doc["delayAfterLaser"];
 					}
 					if (doc.containsKey("delayAfterSound") ) {
-						cfg.delayAfterLaser = doc["delayAfterSound"];
+						cfg.delayAfterSound = doc["delayAfterSound"];
 					}
 					if (doc.containsKey("delayAfterShooting") ) {
 						cfg.delayAfterShooting = doc["delayAfterShooting"];
@@ -587,7 +591,7 @@ void InitServer() {
 						cfg.delayAfterLaser = doc["delayAfterLaser"];
 					}
 					if (doc.containsKey("delayAfterSound") ) {
-						cfg.delayAfterLaser = doc["delayAfterSound"];
+						cfg.delayAfterSound = doc["delayAfterSound"];
 					}
 					if (doc.containsKey("delayAfterShooting") ) {
 						cfg.delayAfterShooting = doc["delayAfterShooting"];
@@ -944,6 +948,10 @@ void loop() {
 				PrintToOLED(0, 4, F("Calibrate Mic   "));
 				PrintToOLEDFullLine(4, 6, " ");
 				break;
+			case MENU_DEBUG_MIC:
+				PrintToOLED(0, 4, F("Debug Mic   "));
+				PrintToOLEDFullLine(4, 6, " ");
+				break;
 			case MENU_SAVE_SETTINGS:
 				PrintToOLED(0, 4, F("Save settings ? "));
 				PrintToOLEDFullLine(4, 6, " ");
@@ -1053,6 +1061,11 @@ void loop() {
 
 	if (thisJoyLeft || thisJoyRight) {
 
+		if (thisJoyLeft)
+			Serial.println("joy left");
+		else 
+			Serial.println("joy right");
+
 		// if the joystick has moved sideways, we change the setting value
 		// also, the screen will need to be updated
 		updateScreen = true;					
@@ -1104,10 +1117,10 @@ void loop() {
 				cfg.delayBeforeFlash = NormaliseIntVal(cfg.delayBeforeFlash, 1, 10, 2000, false);
 				break;
 			case MENU_DELAY_AFTER_LASER:
-				cfg.delayAfterLaser = NormaliseIntVal(cfg.delayAfterLaser, 1, 10, 2000, false);
+				cfg.delayAfterLaser = NormaliseIntVal(cfg.delayAfterLaser, 1, 0, 2000, false);
 				break;
 			case MENU_DELAY_AFTER_SOUND:
-				cfg.delayAfterSound = NormaliseIntVal(cfg.delayAfterLaser, 1, 10, 2000, false);
+				cfg.delayAfterSound = NormaliseIntVal(cfg.delayAfterSound, 1, 0, 2000, false);
 				break;
 			case MENU_DELAY_AFTER_SHOOTING:
 				cfg.delayAfterShooting = NormaliseIntVal(cfg.delayAfterShooting, 1, 0, 5000, false);
@@ -1117,6 +1130,9 @@ void loop() {
 				break;
 			case MENU_CALIBRATE_MIC:
 				RunMicrophoneCalibration();
+				break;
+			case MENU_DEBUG_MIC:
+				ShowMicrophoneOutput();
 				break;
 			case MENU_SAVE_SETTINGS:
 				SaveSettings();
@@ -1139,6 +1155,11 @@ void loop() {
 
 	} else if (thisJoyUp || thisJoyDown) {
 
+		if (thisJoyUp)
+			Serial.println("joy up");
+		else 
+			Serial.println("joy down");
+
 		updateScreen = true;
 
 		NextMenuItem(thisJoyUp ? -1 : 1);
@@ -1157,6 +1178,14 @@ void loop() {
 
 		// check if the joystick button has been pressed, to initiate the process
 		if (thisMidState || thisButton || thisTouch || waitingToShoot) {
+
+			if (thisMidState)
+				Serial.println("joy middle");
+			else if (thisButton)
+				Serial.println("button");
+			else if (thisTouch)
+				Serial.println("touch");
+
 			waitingToShoot = false;
 			RunSequence();
 		}
@@ -1194,15 +1223,20 @@ void ClearScreen() {
 void Turn(Device device, int onOff) {
 	switch (device) {
 		case camera:
-			digitalWrite(CAMERA_PIN, onOff); break;
+			digitalWrite(CAMERA_PIN, onOff); 
+			break;
 		case focus:
-			digitalWrite(FOCUS_PIN, onOff); break;
+			digitalWrite(FOCUS_PIN, onOff); 
+			break;
 		case flash:
-			digitalWrite(FLASH_PIN, onOff); break;
+			digitalWrite(FLASH_PIN, onOff); 
+			break;
 		case laser:
-			digitalWrite(LASER_EMIT_PIN, onOff); break;
+			digitalWrite(LASER_EMIT_PIN, onOff); 
+			break;
 		case solenoid:
-			digitalWrite(SOLENOID_PIN, onOff); break;
+			digitalWrite(SOLENOID_PIN, onOff); 
+			break;
 	}
 }
 
@@ -1327,7 +1361,9 @@ void RunLaserSequence() {
 		return;
 	}
 
-	delay(cfg.delayAfterLaser);											// wait the flash delay time to trigger flash
+	if (cfg.delayAfterLaser > 0) {
+		delay(cfg.delayAfterLaser);											// wait the flash delay time to trigger flash
+	}
 
 	if (cfg.triggerMode == laserTriggerFlash) {
 
@@ -1394,6 +1430,8 @@ void RunLaserAlignment() {
 void RunListenerSequence() {
 
 	Serial.println("Running listener sequence");
+	Serial.print("soundCalibrationLevel = ");
+	Serial.println(soundCalibrationLevel);
 	
 	delay(cfg.delayBeforeShooting);		// wait before startig
 
@@ -1412,6 +1450,8 @@ void RunListenerSequence() {
 
 	 	int detected = analogRead(SOUND_ANALOG_PIN);				// read Laser sensor
 		if (detected < soundCalibrationLevel) {
+			Serial.print("detectedLevel = ");
+			Serial.println(detected);
 			isTriggered = true;
 		} else {
 			int midState = digitalRead(JOY_MID_PIN);
@@ -1427,8 +1467,10 @@ void RunListenerSequence() {
 		return;
 	}
 
-	delay(cfg.delayAfterLaser);											// wait the flash delay time to trigger flash
-
+	if (cfg.delayAfterSound > 0) {
+		delay(cfg.delayAfterSound);											// wait the flash delay time to trigger flash
+	}
+	
 	if (cfg.triggerMode == soundTriggerFlash) {
 
 		Turn(flash,ON);
@@ -1462,8 +1504,9 @@ void RunMicrophoneCalibration() {
 	PrintToOLED(0, 3, F(" Calibrate mike "));
 
 	int calibrationCount = 0;
+	soundCalibrationLevel = 0;
 	// getting ready
-	while (isCancelled == false && calibrationCount < 2000) {
+	while (isCancelled == false && calibrationCount < 10000) {
 
 		int midState = digitalRead(JOY_MID_PIN);
 		if (midState == LOW) {
@@ -1471,9 +1514,44 @@ void RunMicrophoneCalibration() {
 		}
 		
 	 	int detected = analogRead(SOUND_ANALOG_PIN);				// read Laser sensor
-		soundCalibrationLevel = ((detected * 3) + soundCalibrationLevel) / 4;
+	 	if (soundCalibrationLevel == 0) {
+			soundCalibrationLevel = detected;
+	 	} else {
+	 		if (detected < soundCalibrationLevel) {
+				soundCalibrationLevel = detected;
+	 		}
+	 	}
 
 		calibrationCount++;
+	}
+	soundCalibrationLevel -= 80;
+		Serial.print("   New calibration = ");
+		Serial.println(soundCalibrationLevel);
+
+	ClearScreen();													// want the screen off when shooting
+	updateScreen = true;
+}
+
+void ShowMicrophoneOutput() {
+
+	Serial.println("Debugging microphone output");
+	ClearScreen();													// want the screen off when shooting
+	
+	bool isArmed = false;
+	bool isCancelled = false;
+	PrintToOLED(0, 3, F(" Debug mike "));
+
+	// getting ready
+	while (isCancelled == false) {
+
+		int midState = digitalRead(JOY_MID_PIN);
+		if (midState == LOW) {
+			isCancelled = true;
+		}
+		
+	 	int detected = analogRead(SOUND_ANALOG_PIN);				// read Laser sensor
+	 	Serial.print("Sound level = ");
+	 	Serial.println(detected);
 		delay(10);
 	}
 

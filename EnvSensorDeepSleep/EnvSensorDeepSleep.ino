@@ -210,7 +210,13 @@ void setup() {
 	Serial.println('\n');
 	Serial.println('\n');
 	Serial.println('\n');
+	int wifiNum = 2;
+	bool wifiConnected = false;
 
+	while (wifiConnected == false) {
+		wifiNum = 3 - wifiNum;
+		wifiConnected = initWifi(wifiNum);
+	}
 	Serial.println (F("Initialising SGP30 Gas Sensor..."));
 	if (! sgp.begin()){
 		Serial.println("Sensor not found :(");
@@ -250,13 +256,7 @@ void setup() {
 	Serial.print  (F("  Resolution:	")); Serial.print(sensor.resolution); Serial.println(F("%"));
 	Serial.println(F("------------------------------------"));
 	
-	int wifiNum = 2;
-	bool wifiConnected = false;
 
-	while (wifiConnected == false) {
-		wifiNum = 3 - wifiNum;
-		wifiConnected = initWifi(wifiNum);
-	}
 
 	client.setServer(mqtt_server, 1883);
 

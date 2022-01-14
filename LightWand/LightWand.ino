@@ -112,6 +112,8 @@ byte x;
 int g = 0;												// Variable for the Green Value
 int b = 0;												// Variable for the Blue Value
 int r = 0;												// Variable for the Red Value
+int hue = 180;
+int hueSpeed = 2;
 
 // Backlight
 boolean BackLightTimer = false;
@@ -129,12 +131,12 @@ String m_CurrentFilename = "";
 int m_FileIndex = 0;
 int m_NumberOfFiles = 0;
 String m_FileNames[200];					
-
+bool canUseSD = false;
 
 // ******************************************** INITIALISE COMPONENT OBJECTS  *******************************
 
 // LED Display
-U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(/* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // OLEDs without Reset of the Display
+U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(/* clock=*/ SDA, /* data=*/ SCL, /* reset=*/ U8X8_PIN_NONE);   // OLEDs without Reset of the Display
 
 // LED Strip
 CRGB leds[NUM_LEDS];
@@ -370,11 +372,6 @@ bool WriteConfig() {
 	return false;
 }
 
-
-
-
-
-
 /*
 void InitFlashStorage() {
 
@@ -425,14 +422,14 @@ void ClearLCD(void) {
 void SetupLCDdisplay() {
 	u8x8.begin();
 	u8x8.setFont(u8x8_font_chroma48medium8_r);
-	PrintToLCD(0, 0, F("-PIXELWAND V1.3-"));
+	PrintToLCD(0, 0, F("-PIXELWAND V1.4-"));
 	PrintToLCD(2, 1, F("Initializing"));
-	delay(200);	
+	delay(20);	
 }
 
 void InitLCD() {
 	ClearLCD();
-	PrintToLCD(0, 0, F("-PIXELWAND V1.3-"));
+	PrintToLCD(0, 0, F("-PIXELWAND V1.4-"));
 }
 
 void SetupJoystick() {
@@ -540,39 +537,39 @@ bool SetupSDcard() {
 
 	int attempts = 0;
 	PrintToLCD(0, 2, F("SD init starting"));
-	delay(100);
+	delay(10);
 	PrintToLCD(0, 3, F("  Accessing SD  "));
  
 	pinMode(SDSS_PIN, OUTPUT);
 
-	delay(100);
+	delay(10);
 	while (!SD.begin(SDSS_PIN)) {
 		PrintToLCD(0, 4, F(" SD init failed "));
 		attempts += 1;
-		if (attempts > 10) {
+		if (attempts > 2) {
 			PrintToLCD(0, 4, F(" giving up "));
 			Serial.println("gave up trying to initialise the SD card");
 			return false;
 		}
-		delay(500);
+		delay(200);
 	}
 	PrintToLCD(0, 4, F("  SD init done  "));
 	return true;
 }
 
-void readSDcard() {
+void ReadSDcard() {
 
 	root = SD.open("/");
 	PrintToLCD(0, 5, F(" Scanning files "));
-	delay(300);
+	delay(30);
 	GetFileNamesFromSD(root);
 	PrintToLCD(0, 6, F("num files: "));
 	PrintToLCD(11, 6, m_NumberOfFiles);
 	SortFilenames(m_FileNames, m_NumberOfFiles);
 	m_CurrentFilename = m_FileNames[0];
-	delay(1000);
+	delay(100);
 	PrintToLCDFullLine(0, 6, m_CurrentFilename);
-	delay(1000);
+	delay(100);
 	Serial.print("current filename = ");
 	Serial.println(m_CurrentFilename);
 }
@@ -580,15 +577,19 @@ void readSDcard() {
 // Setup loop to get everything ready.	This is only run once at power on or reset
 void setup() {
 	Serial.begin(SERIAL_BAUD);
-	delay(500);
+	delay(100);
 	SetupLCDdisplay();
 	delay(100);
 	SetupLEDs();
 	SetupJoystick();
 	InitConfig();
-	if (SetupSDcard() == true) {
-		readSDcard();
-		ReadConfig();
+	canUseSD = SetupSDcard();
+	if (canUseSD == true) {
+		ReadSDcard();
+	}
+	ReadConfig();
+	if (canUseSD == false) {
+		config.wandMode = WAND_SABRE;
 	}
 	InitLCD();
 }
@@ -817,6 +818,9 @@ void loop() {
 						case 3:
 							PrintToLCDFullLineCentred(4, F("White"));
 							break;
+						case 4:
+							PrintToLCDFullLineCentred(4, F("Rainbow"));
+							break;
 					}
 					break;
 				case 4:
@@ -893,7 +897,7 @@ void loop() {
 								config.brightness = NormaliseVal(config.brightness + dir, 0, 100, false);
 								break;
 							case 3:
-								config.sabreColour = NormaliseVal(config.sabreColour + dir, 0, 3, true);
+								config.sabreColour = NormaliseVal(config.sabreColour + dir, 0, 4, true);
 								break;
 							case 4:
 								config.sabreSpeed = NormaliseVal(config.sabreSpeed + dir, 0, 30, false);
@@ -1040,12 +1044,6 @@ void GetFileNamesFromSD(File dir) {
 				if (CurrentFilename.endsWith(".bmp") || CurrentFilename.endsWith(".BMP") ) { //find files with our extension only
 					if (!CurrentFilename.startsWith("_")) {
 						m_FileNames[fileCount] = entry.name();
-						PrintToLCDFullLine(0, 6, entry.name());
-
-						Serial.print("File number ");
-						Serial.print(fileCount);
-						Serial.print(" set to ");
-						Serial.println(m_FileNames[fileCount]);
 						fileCount++;
 					}
 				}
@@ -1077,6 +1075,7 @@ void GetRGBwithGamma() {
 
 }
 
+int huePoint = 33;
 int startPoint = 36;
 float throbVal = 1;
 boolean throbDir = true;
@@ -1092,11 +1091,60 @@ int FixVal(int v) {
 	return v;
 }
 
+void HSVtoRGB(float H, float S,float V, int* rgbVals) {
+
+    if (H > 360 || H < 0 || S > 100 || S < 0 || V > 100 || V < 0){
+        return;
+    }
+    float s = S/100;
+    float v = V/100;
+    float C = s*v;
+    float X = C*(1-abs(fmod(H/60.0, 2)-1));
+    float m = v-C;
+    float r,g,b;
+    
+    if (H >= 0 && H < 60){
+        r = C,g = X,b = 0;
+    } else if (H >= 60 && H < 120){
+        r = X,g = C,b = 0;
+    } else if (H >= 120 && H < 180){
+        r = 0,g = C,b = X;
+    } else if (H >= 180 && H < 240){
+        r = 0,g = X,b = C;
+    } else if (H >= 240 && H < 300){
+        r = X,g = 0,b = C;
+    } else {
+        r = C,g = 0,b = X;
+    }
+    int R = (r + m) * 255;
+    int G = (g + m) * 255;
+    int B = (b + m) * 255;
+
+    rgbVals[0] = R;
+    rgbVals[1] = G;
+    rgbVals[2] = B;
+}
+
 int SetSabreLine(int displayWidth, int currentLength) {
 
-	int sr = sabreColours[config.sabreColour][0];
-	int sg = sabreColours[config.sabreColour][1];
-	int sb = sabreColours[config.sabreColour][2];
+	int sr,sg,sb;
+
+	if (config.sabreColour == 4) {
+		int rgbVals[3] = {0,0,0};
+		HSVtoRGB(hue,100,config.brightness, &rgbVals[0]);
+		sr = rgbVals[0];
+		sg = rgbVals[1];
+		sb = rgbVals[2];
+		hue = hue + hueSpeed;
+		if (hue > 359) {
+			hue = 0;
+		}
+	} else {
+		sr = sabreColours[config.sabreColour][0];
+		sg = sabreColours[config.sabreColour][1];
+		sb = sabreColours[config.sabreColour][2];
+	}
+
 
 	for (int i = 0; i < currentLength; i++) {
 
@@ -1138,6 +1186,7 @@ int SetSabreLine(int displayWidth, int currentLength) {
 			}
 		}
 	}
+	
 	if (config.sabreMode == SABRE_SOLID) {
 		return 100;
 	}
