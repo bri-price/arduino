@@ -130,20 +130,13 @@ int NormaliseVal(int v, int mi, int ma, boolean loop) {
 	return v;
 }
 
-
-
- 
-void LatchAndDelay(int dur) {
-	FastLED.show();
-	delay(dur);
-}
-
 void ClearStrip(int duration) {
 
 	for (int x = 0; x < NUM_LEDS; x++) {
 		leds[x] = 0;
 	}
 	FastLED.show();
+	pinMode(DATA_PIN, INPUT_PULLUP);
 }
 
 int brightness = 80;
@@ -282,7 +275,9 @@ void SendSabre() {
 		int lad = SetSabreLine(displayWidth, numLit);
 		if (runningSabre == false)
 			lad = 0;
-		LatchAndDelay(lad);
+
+		FastLED.show();
+		delay(lad);
 	}
 }
 
