@@ -177,8 +177,10 @@ enum TriggerMode {
 #define JOY_LEFT_PIN		27
 #define JOY_RIGHT_PIN		26
 #define JOY_MID_PIN			25
+#define JOY_RST_PIN			15
 
 // menu items
+#define MENU_READY_MODE					0
 #define MENU_TRIGGER_MODE				1
 // dropper values
 #define MENU_DELAY_BEFORE_SHOOTING		2
@@ -242,7 +244,7 @@ CONFIGURATION cfg;
 bool joystickRight = true;
 bool lastJoyLeft = false;
 bool lastJoyRight = false;
-int menuItem = 1;
+int menuItem = 0;
 
 bool updateScreen = true;
 int delayVal = 0;
@@ -364,20 +366,26 @@ bool MenuItemIsActive() {
 			return false;
 		}
 	}
+	return true;
 }
 
 void NextMenuItem(int menuDirection) {
 
 	// move to the next menu item either up or down. Skip any that should
 	// not be active, and loop round if it goes past the first or last
+	Serial.print("Menu item from ");
+	Serial.print(menuItem);
+	Serial.print(" to ");
+
 	menuItem += menuDirection;
-	
+
 	// loop around
-	if (menuItem == 0) {
+	if (menuItem == -1) {
 		menuItem = NUM_MENU_ITEMS;	
 	} else if (menuItem > NUM_MENU_ITEMS) {
-		menuItem = 1;
+		menuItem = 0;
 	}	
+	Serial.println(menuItem);
 
 	// do this after looping, in case the first or last one should not be active
 	if (!MenuItemIsActive()) {
@@ -772,6 +780,9 @@ void InitGPIO() {
 		pinMode(JOY_MID_PIN, INPUT_PULLUP);
 		digitalWrite(JOY_MID_PIN, HIGH);
 		
+		pinMode(JOY_RST_PIN, INPUT_PULLUP);
+		digitalWrite(JOY_RST_PIN, HIGH);
+
 	} else {
 
 		pinMode(JOY_RIGHT_PIN, INPUT_PULLUP);
@@ -849,15 +860,23 @@ void loop() {
 	// first, handle updating the screen from the last rotary	use
 	if (updateScreen) {
 		updateScreen = false;
-		PrintToOLED(0, 0, F("DSLR AUTOTRIGGER"));
+		PrintToOLED(0, 0, F("DSLR TRIGGER 1.6"));
 		if (connectedToWifi) {
 			PrintToOLEDFullLine(0, 1, WiFi.localIP().toString());
 		} else {
 			PrintToOLEDFullLine(0, 1, "disconnected");
 		}
-		String m = String("Option " + String(menuItem) + " ");
-		PrintToOLEDFullLine(3, 3, m);
+
+		if (menuItem > 0) {
+			String m = String("Option " + String(menuItem) + " ");
+			PrintToOLEDFullLine(3, 3, m);
+		}
 		switch (menuItem) {
+			case MENU_READY_MODE:
+				PrintToOLED(0, 3, F("     READY      "));
+				PrintToOLED(0, 4, F("                "));
+				PrintToOLED(0, 6, F("                "));
+				break;
 			case MENU_TRIGGER_MODE:
 				PrintToOLED(0, 4, F("Trigger Mode    "));
 				if (cfg.triggerMode == laserTriggerFlash) {
@@ -994,6 +1013,7 @@ void loop() {
 	bool thisJoyLeft = false;
 	bool thisJoyRight = false;
 	bool thisMidState = false;
+	bool thisRstState = false;
 
 	if (joystickType == DIGITAL_JOYSTICK) {
 		int iJoyUp = digitalRead(JOY_UP_PIN);
@@ -1018,6 +1038,8 @@ void loop() {
 			int iButton = digitalRead(BUTTON_PIN);
 			thisButton = (iButton == LOW);
 		}
+		int irstState = digitalRead(JOY_RST_PIN);
+		thisRstState = (irstState == LOW);
 	
 	} else {
 
@@ -1083,6 +1105,8 @@ void loop() {
 
 		// modify the selected item
 		switch (menuItem) {
+			case MENU_READY_MODE:
+				break;
 			case MENU_TRIGGER_MODE:
 				cfg.triggerMode = (TriggerMode)NormaliseIntVal((int)cfg.triggerMode, 1, 0, 4, true);
 				break;
@@ -1189,6 +1213,13 @@ void loop() {
 			waitingToShoot = false;
 			RunSequence();
 		}
+
+		if (thisRstState) {
+			SaveSettings();
+			PrintToOLEDFullLine(4, 6, "saved");
+			updateScreen = false;
+			thisRstState = false;
+		}
 		if (cameraTestIsRunning == false) {
 			Turn(camera,OFF);
 		}
@@ -1206,13 +1237,13 @@ void InitOLED() {
 	Serial.println("Initialising OLED");
 	u8x8.begin();
 	u8x8.setFont(u8x8_font_chroma48medium8_r);
-	PrintToOLED(0, 0, F("DSLR AUTOTRIGGER"));
+	PrintToOLED(0, 0, F("DSLR TRIGGER 1.6"));
 	PrintToOLED(0, 1, F("  Initializing  "));
 }
 
 void ResetOLED() {
 	ClearScreen();
-	PrintToOLED(0, 0, F("DSLR AUTOTRIGGER"));
+	PrintToOLED(0, 0, F("DSLR TRIGGER 1.6"));
 }
 
 void ClearScreen() {

@@ -259,7 +259,7 @@ int myLed = 13;
 
 uint16_t Pcal[8];         // calibration constants from MS5637 PROM registers
 unsigned char nCRC;       // calculated check sum to ensure PROM integrity
-uint32_t D1 = 0, D2 = 0;  // raw MS5637 pressure and temperature data
+uint32_t uD1 = 0, uD2 = 0;  // raw MS5637 pressure and temperature data
 double dT, OFFSET, SENS, T2, OFFSET2, SENS2;  // First order and second order corrections for raw S5637 temperature and pressure data
 
 int16_t MPU9250Data[7]; // used to read all 14 bytes at once from the MPU9250 accel/gyro
@@ -489,9 +489,9 @@ void loop()
    // Print temperature in degrees Centigrade      
     Serial.print("Gyro temperature is ");  Serial.print(temperature, 1);  Serial.println(" degrees C"); // Print T values to tenths of s degree C
  
-    D1 = MS5637Read(ADC_D1, OSR);  // get raw pressure value
-    D2 = MS5637Read(ADC_D2, OSR);  // get raw temperature value
-    dT = D2 - Pcal[5]*pow(2,8);    // calculate temperature difference from reference
+    uD1 = MS5637Read(ADC_D1, OSR);  // get raw pressure value
+    uD2 = MS5637Read(ADC_D2, OSR);  // get raw temperature value
+    dT = uD2 - Pcal[5]*pow(2,8);    // calculate temperature difference from reference
     OFFSET = Pcal[2]*pow(2, 17) + dT*Pcal[4]/pow(2,6);
     SENS = Pcal[1]*pow(2,16) + dT*Pcal[3]/pow(2,7);
  
@@ -521,7 +521,7 @@ void loop()
      OFFSET = OFFSET - OFFSET2;
      SENS = SENS - SENS2;
  
-     Pressure = (((D1*SENS)/pow(2, 21) - OFFSET)/pow(2, 15))/100;  // Pressure in mbar or kPa
+     Pressure = (((uD1*SENS)/pow(2, 21) - OFFSET)/pow(2, 15))/100;  // Pressure in mbar or kPa
   
     const int station_elevation_m = 1050.0*0.3048; // Accurate for the roof on my house; convert from feet to meters
 
@@ -1269,7 +1269,7 @@ void I2Cscan()
 
 // I2C read/write functions for the MPU9250 and AK8963 sensors
 
-        void writeByte(uint8_t address, uint8_t subAddress, uint8_t data)
+void writeByte(uint8_t address, uint8_t subAddress, uint8_t data)
 {
 	Wire.beginTransmission(address);  // Initialize the Tx buffer
 	Wire.write(subAddress);           // Put slave register address in Tx buffer
@@ -1277,7 +1277,7 @@ void I2Cscan()
 	Wire.endTransmission();           // Send the Tx buffer
 }
 
-        uint8_t readByte(uint8_t address, uint8_t subAddress)
+uint8_t readByte(uint8_t address, uint8_t subAddress)
 {
 	uint8_t data; // `data` will store the register data	 
 	Wire.beginTransmission(address);         // Initialize the Tx buffer
@@ -1290,7 +1290,7 @@ void I2Cscan()
 	return data;                             // Return data read from slave register
 }
 
-        void readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest)
+void readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest)
 {  
 	Wire.beginTransmission(address);   // Initialize the Tx buffer
 	Wire.write(subAddress);            // Put slave register address in Tx buffer

@@ -22,6 +22,7 @@
 #include <U8x8lib.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <Adafruit_NeoPixel.h>
 
 #include "Secrets.h"
 
@@ -38,7 +39,8 @@ enum Device {
 	focus,
 	flash,
 	laser,
-	solenoid
+	solenoid,
+	ringlight
 };
 
 enum LaserMode {
@@ -51,6 +53,7 @@ enum LaserMode {
 #define CAMERA_PIN		18
 #define FOCUS_PIN		5
 #define FLASH_PIN		19
+#define NEODATA_PIN		2
 
 // laser detector
 #define LASER_PIN		32
@@ -86,10 +89,13 @@ enum LaserMode {
 #define MENU_TEST_FLASH					14
 #define MENU_TEST_SOLENOID				15
 #define MENU_ALIGN_LASER				16
+#define MENU_RING_MODE					17
+#define MENU_RING_SECTIONS				18
 
 // always update this if you add an item to the list above
-#define NUM_MENU_ITEMS					16
+#define NUM_MENU_ITEMS					18
 
+#define NUMPIXELS						60
 // configurable values - saved in eeprom
 typedef struct {
 
@@ -106,6 +112,7 @@ typedef struct {
 	int screenTimeout = 5;
 	bool useTwoDrops = false;
 	LaserMode laserMode = off;
+	int numSections = 5;
 	
 } CONFIGURATION;
 
@@ -129,11 +136,83 @@ double accelerationFactor = 1.3;
 bool cameraTestIsRunning = false;
 bool solenoidTestIsRunning = false;
 
+int lit = 0;
+//int counter = 0;
+//int colourValue = 0;
+//int section = 1;
+//int brightness = 1;
+
+Adafruit_NeoPixel pixels(NUMPIXELS, NEODATA_PIN, NEO_GRB + NEO_KHZ800);
+uint32_t pixelColours[] = { 
+	pixels.Color(0, 0, 0), 
+	pixels.Color(10, 10, 10), 
+	pixels.Color(20, 20, 20), 
+	pixels.Color(40, 40, 40), 
+	pixels.Color(80, 80, 80),
+	pixels.Color(150, 150, 150),
+	pixels.Color(255, 255, 255)
+	};
 
 // OLED uses standard pins for SCL and SDA
 U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(SCL, SDA, U8X8_PIN_NONE);	 // OLEDs without Reset of the Display
 
 AsyncWebServer server(80);
+
+void flashSection(int section, int brightness) {
+
+	if (section < 1 || section > cfg.numSections) {
+		for (int i = 0; i < NUMPIXELS; i++) {
+			pixels.setPixelColor(i, pixelColours[0]);
+		}
+	    pixels.show();
+	    return;
+	}
+
+	brightness = normaliseBrightness(brightness);
+	
+	section -= 1;
+	
+	int sectionStart = section * (NUMPIXELS / cfg.numSections);
+	int sectionEnd = (section + 1) * (NUMPIXELS / cfg.numSections);
+	for (int i = 0; i < NUMPIXELS; i++) {
+		if (i >= sectionStart && i < sectionEnd) {
+			pixels.setPixelColor(i, pixelColours[brightness]);
+		} else {
+			pixels.setPixelColor(i, pixelColours[0]);
+		}
+	}
+    pixels.show();
+}
+
+int normaliseBrightness(int brightness) {
+
+	if (brightness < 0) {
+		return 0;
+	}
+	
+	int numBrights = sizeof(pixelColours) / sizeof(uint32_t) - 1;
+	if (brightness > numBrights) {
+		return numBrights;
+	}
+	return brightness;
+}
+
+void flashAll(int brightness) {
+
+	brightness = normaliseBrightness(brightness);
+	for (int i = 0; i < NUMPIXELS; i++) {
+		pixels.setPixelColor(i, pixelColours[brightness]);
+	}
+    pixels.show();
+}
+
+void flashNone() {
+
+	for (int i = 0; i < NUMPIXELS; i++) {
+		pixels.setPixelColor(i, pixelColours[0]);
+	}
+    pixels.show();
+}
 
 boolean InitWifiSSID(char *ssid, char *pass) {
 
@@ -380,6 +459,8 @@ void InitConfig() {
 	
 	EEPROM.get(eepromPtr, cfg.laserMode);
 	eepromPtr += sizeof(cfg.laserMode);
+	EEPROM.get(eepromPtr, cfg.numSections);
+	eepromPtr += sizeof(cfg.numSections);
 
 	Serial.print("cameraDuration read as ");
 	Serial.println(cfg.cameraDuration);
@@ -417,6 +498,10 @@ void SaveSettings() {
 	eepromPtr += sizeof(cfg.useTwoDrops);
 	EEPROM.put(eepromPtr, cfg.laserMode);
 	eepromPtr += sizeof(cfg.laserMode);
+	EEPROM.put(eepromPtr, cfg.numSections);
+	eepromPtr += sizeof(cfg.numSections);
+
+	
 
 	EEPROM.commit();
 	
@@ -460,6 +545,8 @@ void InitGPIO() {
 
 	pinMode(LASER_PIN, OUTPUT);
 	Turn(laser,OFF);
+
+	pinMode(NEODATA_PIN, OUTPUT);
 }
 
 void InitSerial() {
@@ -503,6 +590,12 @@ void loop() {
 		String m = String("Option " + String(menuItem) + " ");
 		PrintToOLEDFullLine(3, 2, m);
 		switch (menuItem) {
+			//#define MENU_RING_MODE					17
+			//#define MENU_RING_SECTIONS				18
+			case MENU_RING_SECTIONS:
+				PrintToOLED(0, 4, F("Num sections    "));
+				PrintToOLEDFullLine(4, 6, cfg.numSections);
+				break;
 			case MENU_DELAY_BEFORE_SHOOTING:
 				PrintToOLED(0, 4, F("Pre-shoot delay "));
 				PrintToOLEDFullLine(4, 6, cfg.delayBeforeShooting);
@@ -629,6 +722,8 @@ void loop() {
 
 		// modify the selected item
 		switch (menuItem) {
+			case MENU_RING_SECTIONS:
+				cfg.numSections = NormaliseIntVal(cfg.numSections, 1, 1, NUMPIXELS);
 			case MENU_DELAY_BEFORE_SHOOTING:
 				cfg.delayBeforeShooting = NormaliseIntVal(cfg.delayBeforeShooting, 10, 0, 5000);
 				break;
@@ -708,11 +803,6 @@ void loop() {
 		Turn(solenoid,OFF);
 		Turn(laser,OFF);
 		Turn(flash,OFF);
-//		digitalWrite(CAMERA_PIN, LOW);
-//		digitalWrite(FOCUS_PIN, LOW);
-//		digitalWrite(SOLENOID_PIN, LOW);
-//		digitalWrite(LASER_PIN, LOW);
-//		digitalWrite(FLASH_PIN, LOW);
 
 	} else {
 
@@ -724,17 +814,12 @@ void loop() {
 		}
 		if (cameraTestIsRunning == false) {
 			Turn(camera,OFF);
-//			digitalWrite(CAMERA_PIN, LOW);
 		}
 		Turn(focus,OFF);
 		Turn(laser,OFF);
 		Turn(flash,OFF);
-//		digitalWrite(FOCUS_PIN, LOW);
-//		digitalWrite(FLASH_PIN, LOW);
-//		digitalWrite(LASER_PIN, LOW);
 		if (solenoidTestIsRunning == false) {
-		Turn(solenoid,OFF);
-//			digitalWrite(SOLENOID_PIN, LOW);
+			Turn(solenoid,OFF);
 		}
 	}
 }
